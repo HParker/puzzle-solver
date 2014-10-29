@@ -41,6 +41,6 @@
 
 ;; make-hcpos: bs-position -> hc-position
 ;; wrapper for the position rep augmented with the hashcode
-(define: (make-hcpos [bsrep : Bytes]) : hc-position (hc-position (cast (equal-hash-code bsrep) Fixnum) bsrep))
+(define: (make-hcpos [bsrep : Bytes]) : hc-position (hc-position (assert (equal-hash-code bsrep) fixnum?) bsrep))
 
 

@@ -106,29 +106,28 @@
 (define: (init-all! [ptv : (Vectorof (Listof Any))] [s : prepos] [t : TileSpec] [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
   (set! *bh* nrow)
   (set! *bw* ncol)
-  (set! *bsz* (cast (- (* nrow ncol) (length invalid)) Byte))
+  (set! *bsz* (assert (- (* nrow ncol) (length invalid)) byte?))
   (init-cell-loc-maps! nrow ncol invalid)
-  (set! *num-piece-types* (cast (vector-length ptv) Byte)) ;; must come before bw-positionify/(pre-compress)
-  (set! *piecelocvec* (cast (make-vector *bsz* #f) (Vectorof Boolean)))
+  (set! *num-piece-types* (assert (vector-length ptv) byte?)) ;; must come before bw-positionify/(pre-compress)
+  (set! *piecelocvec* (ann (make-vector *bsz* #f) (Vectorof Boolean)))
   (set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof Any))));****
   #|(set! *piece-types* (for/vector: : (Vectorof (Setof Any)) ([cell-specs : (Listof Any) ptv])
                         (list->set cell-specs)))|#
   (set! *invalid-cells* invalid)
-  (set! *num-pieces* (cast (+ (length (prepos-tspecs s)) (length (prepos-spaces s))) Byte)) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
+  (set! *num-pieces* (assert (+ (length (prepos-tspecs s)) (length (prepos-spaces s))) byte?)) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
   (set! *start* (make-hcpos (charify (bw-positionify (pre-compress s)))))
   (set! *piece-type-template* (for/vector: : (Vectorof Byte)
                                 ([pt : (Listof Loc) (old-positionify (bw-positionify (pre-compress s)))])
                                 (assert (length pt) byte?)))
   (set! *num-spaces* (vector-ref *piece-type-template* 0))
-  (set! *expansion-space* (cast (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*))))
-                                (Vectorof hc-position)))
+  (set! *expansion-space* (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*))))) ;(Vectorof hc-position)))
   #|
   (set! *expandbuf* (cast (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*)
                                         (lambda (_) (cast (mcons 0 (make-bytes *num-pieces*)) (MPairof Byte Bytes)))) 
                           (Vectorof (MPairof Byte Bytes))))
 |#
   (set! *bs-ptype-index*
-        (cast 
+        (ann
          (list->vector
           (for/fold: : (Listof Byte) ([res : (Listof Byte) '()])
             ([ptype-count : Byte (in-vector *piece-type-template*)]
@@ -138,10 +137,10 @@
         
   ;; should set *target* to a bytestring index and an expected location for that indexed value
   ;;******** this only works for a single goal-spec for a tile-type with only one instance, but ....
-  (set! *target* (cons (cast (for/sum: : Integer ([ntypes : Byte (in-vector *piece-type-template*)]
-                                                  [i : Byte (car t)])
-                               (assert ntypes byte?)) Byte)
-                       (cast (+ (cell-to-loc (cdr t)) *charify-offset*) Byte)))
+  (set! *target* (cons (assert (for/sum: : Integer ([ntypes : Byte (in-vector *piece-type-template*)]
+                                                    [i : Byte (car t)])
+                                 (assert ntypes byte?)) byte?)
+                       (assert (+ (cell-to-loc (cdr t)) *charify-offset*) byte?)))
   )
 
 ;;---------------------------------------------------------------------------------
@@ -154,10 +153,10 @@
                         (cons r c)))
   (let ((invalid-skipped 0))
     (set! *cell-to-loc* (for/array: #:shape (vector nrow ncol) ([i (* *bh* *bw*)]) : (U Byte False)
-                                    (if (member (slow-loc-to-cell (cast i Byte)) invalid)
+                                    (if (member (slow-loc-to-cell (assert i byte?)) invalid)
                                         (begin (set! invalid-skipped (add1 invalid-skipped))
                                                #f)
-                                        (cast (- i invalid-skipped) Byte))))))
+                                        (assert (- i invalid-skipped) byte?))))))
 
 ;; cell-to-loc: cell -> int
 ;; convert ordered pair to row-major-order rank location
@@ -169,7 +168,7 @@
 
 ;; slow version of loc-to-cell for use during population of *cell-to-loc*
 (define: (slow-loc-to-cell (i : Byte)) : Cell
-  (cons (cast (floor (/ i *bw*)) Byte)
+  (cons (assert (floor (/ i *bw*)) byte?)
         (remainder i *bw*)))
 
 ;; loc-to-cell: int -> cell
@@ -212,12 +211,12 @@
   (for/vector: : BW-Position ([pspec : (Pairof Byte (Listof Cell)) (in-list old-position)]
                               [i : Byte *num-piece-types*])
     (unless (= i (car pspec)) (error 'positionify "mis-matched piece-type in vector representation of position"))
-    (list->bwrep (map cell-to-loc (cast (cdr pspec) (Listof Cell))))))
+    (list->bwrep (map cell-to-loc (ann (cdr pspec) (Listof Cell))))))
 
 ;; old-positionify: bw-position -> old-position
 (define: (old-positionify [bw-position : BW-Position]) : (Vectorof (Listof Loc))
   (for/vector: : (Vectorof (Listof Loc)) ([bwrep : Integer bw-position])
-    (bwrep->list (cast bwrep Positive-Integer))))
+    (bwrep->list (assert bwrep positive?))))
 
 ;; list->bwrep: (listof loc) -> int
 ;; convert the list of locations into a bitwise representation
@@ -242,7 +241,7 @@
 (define: (bwrep->list [n : Positive-Integer]) : (Listof Loc)
   (for/list ([i (in-range (integer-length n))]
              #:when (bitwise-bit-set? n i))
-    (cast i Byte)))    
+    (assert i byte?)))    
 
 
 ;; pre-compress: prepos -> (listof (cons tile-id (listof cell)))
@@ -250,12 +249,12 @@
 (define: (pre-compress [p : prepos]) : (Listof (Pairof Byte (Listof Cell)))
   (cons (ann (cons 0 (prepos-spaces p))
              (Pairof Byte (Listof Cell)))
-        (for/list: : (Listof (Pairof Byte (Listof Cell))) ([i : Integer (in-range 1 (cast *num-piece-types* Byte))])
-          (cast (cons i
-                      (for/list: : (Listof Cell) ([a-piece : tspec (prepos-tspecs p)]
-                                                  #:when (= i (tspec-tiletype a-piece)))
-                        (tspec-origin a-piece)))
-                (Pairof Byte (Listof Cell))))))
+        (for/list: : (Listof (Pairof Byte (Listof Cell))) ([i : Integer (in-range 1 (assert *num-piece-types* byte?))])
+          (ann (cons (assert i byte?)
+                     (for/list: : (Listof Cell) ([a-piece : tspec (prepos-tspecs p)]
+                                                 #:when (= i (tspec-tiletype a-piece)))
+                       (tspec-origin a-piece)))
+               (Pairof Byte (Listof Cell))))))
 
 
 ;;------------------------------------------------------------------------------------------------------
