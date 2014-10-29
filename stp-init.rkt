@@ -104,10 +104,10 @@
 ;; init-all!: piece-type-vector prepos target N N (listof (N . N)) string -> void
 ;; generic setter for use by puzzle-specific initialization functions
 (define: (init-all! [ptv : (Vectorof (Listof Any))] [s : prepos] [t : TileSpec] [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
-  (init-cell-loc-maps! nrow ncol invalid)
   (set! *bh* nrow)
   (set! *bw* ncol)
   (set! *bsz* (cast (- (* nrow ncol) (length invalid)) Byte))
+  (init-cell-loc-maps! nrow ncol invalid)
   (set! *num-piece-types* (cast (vector-length ptv) Byte)) ;; must come before bw-positionify/(pre-compress)
   (set! *piecelocvec* (cast (make-vector *bsz* #f) (Vectorof Boolean)))
   (set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof Any))));****
@@ -152,10 +152,12 @@
 (define: (init-cell-loc-maps! [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
   (set! *loc-to-cell* (for*/vector: : (Vectorof Cell) ([r nrow][c ncol] #:unless (member (cons r c) invalid))
                         (cons r c)))
-  (set! *cell-to-loc* (for/array: #:shape (vector nrow ncol) ([i (vector-length *loc-to-cell*)]) : (U Byte False)
-                                  (if (member (vector-ref *loc-to-cell* i) invalid)
-                                      #f
-                                      (cast i Byte)))))
+  (let ((invalid-skipped 0))
+    (set! *cell-to-loc* (for/array: #:shape (vector nrow ncol) ([i (* *bh* *bw*)]) : (U Byte False)
+                                    (if (member (slow-loc-to-cell (cast i Byte)) invalid)
+                                        (begin (set! invalid-skipped (add1 invalid-skipped))
+                                               #f)
+                                        (cast (- i invalid-skipped) Byte))))))
 
 ;; cell-to-loc: cell -> int
 ;; convert ordered pair to row-major-order rank location
@@ -164,6 +166,11 @@
     (if (boolean? maybe-loc)
         (error 'cell-to-loc "attempt to access loc for invalid cell")
         maybe-loc)))
+
+;; slow version of loc-to-cell for use during population of *cell-to-loc*
+(define: (slow-loc-to-cell (i : Byte)) : Cell
+  (cons (cast (floor (/ i *bw*)) Byte)
+        (remainder i *bw*)))
 
 ;; loc-to-cell: int -> cell
 (define: (loc-to-cell [i : Loc]) : Cell

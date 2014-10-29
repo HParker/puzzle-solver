@@ -3,6 +3,8 @@
 (require racket/list
          racket/set
          ;racket/math
+         "stpconfigs/configenv.rkt"
+         ;"stp-datatypes.rkt"
          "stp-init.rkt"
          "stp-solve-base.rkt"
          "stp-fringefilerep.rkt"
@@ -361,10 +363,10 @@
 ;(climb12-init)
 ;(climb15-init)
 ;(climbpro24-init)
-(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" (get-*puzzle-name*)))
+(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
 
 (define heuristic
-  (case (get-*puzzle-name*)
+  (case *puzzle-name*
     [("block10v12") b10-heuristic]
     [("climb12") c12-heuristic+]))
 
