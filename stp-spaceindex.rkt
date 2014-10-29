@@ -7,6 +7,8 @@
  racket/set
  ;test-engine/racket-tests
  ;racket/generator
+ "stpconfigs/configenv.rkt"
+ "stp-datatypes.rkt"
  "stp-init.rkt"
  "stp-solve-base.rkt"
  )
@@ -47,11 +49,13 @@
 
 ;; canonize: N N N N -> byte-string
 ;; convert the four blank locations into a canonical (3-byte) blank-configuration
+;(define: (canonize [b1 : Loc] [b2 : Loc] [b3 : Loc] [b4 : Loc]) : Bytes
 (define (canonize b1 b2 b3 b4)
   (bytes (locs->rcbyte b1 b2) (locs->rcbyte b2 b3) (locs->rcbyte b3 b4)))
 
 ;; decanonize: byte-string (N . N) -> (listof loc)
 ;; map a canonical rep into list of locations
+;(define: (decanonize [bs : Bytes] [rcref : Cell]) : (Listof Loc)
 (define (decanonize bs rcref)
   (let* ([b1b2 (rcbyte->rcpair (bytes-ref bs 0))]
          [b2b3 (rcbyte->rcpair (bytes-ref bs 1))]
@@ -64,8 +68,23 @@
           (cell-to-loc b3)
           (cell-to-loc b4))))
 
+;; transferred from stp-spacenidex.rkt
+          
+;; register-loc-to-pair: N (N . N) -> (N . N)
+;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
+;(define: (register-loc-to-pair [loc : Loc] [ref : Cell]) : Cell
+(define (register-loc-to-pair loc ref) 
+  (register-cell-to-pair (loc-to-cell loc) ref))
+
+;; register-cell-to-pair: (N . N) (N . N) -> (N . N)
+;; given actual cell and reference for blank-config, convert cell to canonical row-col pair
+;(define: (register-cell-to-pair [cell : Cell] [ref : Cell]) : Cell
+(define (register-cell-to-pair cell ref)
+  (rc- cell ref))
+
 ;; locs->rcbyte: N N -> rcbyte
 ;; convert the  difference between two locations to single rcbyte
+;(define: (locs->rcbyte [loc1 : Loc] [loc2 : Loc]) : Byte
 (define (locs->rcbyte loc1 loc2)
   (let* ([c1 (loc-to-cell loc1)]
          [c2 (loc-to-cell loc2)]
@@ -75,6 +94,7 @@
 
 ;; rcpair->rcbyte: (N . N) -> byte
 ;; convert a row-col pair where the row value in range [0,*bh*) and col in range [-*bw*,+*bw*] into a rcbyte
+;(define: (rcpair->rcbyte [rcp : (Pairof Fixnum Fixnum)]) : Byte
 (define (rcpair->rcbyte rcp)
   (when (or (< (car rcp) -2) (< (cdr rcp) (- (get-*bw*))))
     (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
@@ -84,28 +104,20 @@
 
 ;; rcbyte->rcpair: byte -> (N . N)
 ;; recover the row-col pair from the byte
+;(define: (rcbyte->rcpair [b : Byte]) : (Pairof Fixnum Fixnum)
 (define (rcbyte->rcpair b)
   (let ([decharified-b (- b *charify-offset*)])
     (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
           (- (bitwise-and decharified-b 15) (get-*bw*)))))
-          
-;; register-loc-to-pair: N (N . N) -> (N . N)
-;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
-(define (register-loc-to-pair loc ref)
-  (register-cell-to-pair (loc-to-cell loc) ref))
-
-;; register-cell-to-pair: (N . N) (N . N) -> (N . N)
-;; given actual cell and reference for blank-config, convert cell to canonical row-col pair
-(define (register-cell-to-pair cell ref)
-  (rc- cell ref))
-
-(define (deregister-pair-to-cell ref pair)
-  (register-cell-to-pair ref pair))
 
 ;; rc+/-: (N . N) (N . N) -> (N . N)
 ;; add or subtract the given cons pairs
-(define (rc+ p1 p2) (cons (+ (car p1) (car p2)) (+ (cdr p1) (cdr p2))))
-(define (rc- p1 p2) (cons (- (car p1) (car p2)) (- (cdr p1) (cdr p2))))
+;(define: (rc+ [p1 : (Pairof Fixnum Fixnum)] [p2 : (Pairof Fixnum Fixnum)]) : (Pairof Fixnum Fixnum)
+(define (rc+ p1 p2)
+  (cons (+ (car p1) (car p2)) (+ (cdr p1) (cdr p2))))
+(define (rc- p1 p2)
+  (cons (- (car p1) (car p2)) (- (cdr p1) (cdr p2))))
+
 
 ;;-------------------------------------------------------------------------
 
@@ -129,6 +141,7 @@
          [b3 (in-range (add1 b2) (- (get-*bsz*) 1))]
          [b4 (in-range (add1 b3) (get-*bsz*))]
          )
+    (printf "~a ~a ~a ~a~%" b1 b2 b3 b4)
     (let ([spaceint (bwrep-direct b1 b2 b3 b4)]
           [canonical-blankindex (canonize b1 b2 b3 b4)]
           )

@@ -308,4 +308,3 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
     (make-fringe path-to-fringefile
                  (list (make-filespec file filepcount (file-size file) path-to-fringefile))
                  filepcount)))
-

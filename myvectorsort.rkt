@@ -84,4 +84,5 @@
 (set! myv1 myv1)
 
 ;(vector-sort! myv <)
-myv1
+;'myvectorsort
+;myv1

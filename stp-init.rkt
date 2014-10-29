@@ -1,15 +1,17 @@
 #lang typed/racket/base
 
-               
 (require math/array
          racket/list
          ;racket/set
          racket/vector
          )
 
-
 (require/typed racket/set
                [list->set (-> (Listof Any) (Setof Any))])
+
+(require "stpconfigs/configenv.rkt"
+         "stp-datatypes.rkt"
+         "stp-puzzle-data.rkt")
 
 (provide EXPAND-SPACE-SIZE
          (struct-out hc-position)
@@ -18,7 +20,6 @@
          *num-prim-move-translations*
          *prim-move-translations*
          *charify-offset*
-         *puzzle-name* get-*puzzle-name*
          *piece-types* get-*piece-types*
          *num-pieces* get-*num-pieces*
          *bs-ptype-index* get-*bs-ptype-index*
@@ -40,13 +41,18 @@
          ;bwrep->list
          cell-to-loc
          loc-to-cell
+         ;register-loc-to-pair
+         ;locs->rcbyte
+         ;rcpair->rcbyte
+         ;rcbyte->rcpair
+         ;rc+
+         ;rc-
          block10-init
          climb12-init
          climb15-init
          climbpro24-init
          )
 
-(define: (get-*puzzle-name*) : String *puzzle-name*)
 (define: (get-*piece-types*) : (Vectorof (Setof Any)) *piece-types*)
 (define: (get-*num-pieces*) : Integer *num-pieces*)
 (define: (get-*bs-ptype-index*) : (Vectorof Byte) *bs-ptype-index*)
@@ -61,48 +67,6 @@
 (define: (get-*piecelocvec*) : (Vectorof Boolean) *piecelocvec*)
 
 
-;; ******************************************************************************
-;; DATA DEFINITIONS
-
-;; a cell is a pair, (list r c), for row and column r and c
-(define-type Cell (Pairof Byte Byte))
-
-;; a location (loc for short) is an int, representing the row-major rank of a cell
-(define-type-alias Loc Byte)
-
-;; a tile-spec is a triple, (cons a c), where a is the tile-type and c is the cell of the piece-type's origin
-(define-type TileSpec (Pairof Byte Cell))
-(struct: tspec ([tiletype : Byte] [origin : Cell]))
-
-;; a tile-loc-spec (tlspec), is a (list t l), where t is the tile-type and l is the loc of that tile
-
-;; a pre-position is a (append (listof tile-spec) (listof cell))
-(struct: prepos ([tspecs : (Listof tspec)] [spaces : (Listof Cell)]))
-
-;; a old-position is a (vectorof (listof int))
-;; where the index of the top-level vectors reflect the piece-type as given in the init,
-;; and the ints in the secondary vectors are the SORTED locations of the pieces of that type
-
-;; a bw-position is a (vector int)
-;; where each int is a bitwise representation of the locations of the pieces of that type
-(define-type-alias BW-Position (Vectorof Integer))
-
-;; a bs-position is a bytestring, where each byte represents the location of the corresponding tile
-
-;; a hc-position (hcpos for short) is a structure: (make-hc-position hc bwrep)
-;; where hc is the equal-hash-code for the bytestring of the position, bwrep
-
-
-;; ******************************************************************************
-
-(struct: hc-position ([hc : Fixnum] [bs : Bytes]) #:transparent #:mutable)
-;; the hc is the hashcode of the bytestring
-
-;; make-hcpos: bs-position -> hc-position
-;; wrapper for the position rep augmented with the hashcode
-(define: (make-hcpos [bsrep : Bytes]) : hc-position (hc-position (cast (equal-hash-code bsrep) Fixnum) bsrep))
-
-
 ;; INITIALIZE STUFF FOR SLIDING-TILE-SOLVER
 
 (define EXPAND-SPACE-SIZE 500000)
@@ -115,7 +79,6 @@
 (define: *max-board-size* : Byte 64)
 
 ;; puzzle specific parameters
-(define: *puzzle-name* : String "a string identifying the puzzle for selecting possible configuration files")
 (define: *invalid-cells* : (Listof Cell) empty)
 (define: *num-piece-types* : Byte 0)
 (define: *piece-types* : (Vectorof (Setof Any)) (vector))
@@ -140,9 +103,8 @@
 
 ;; init-all!: piece-type-vector prepos target N N (listof (N . N)) string -> void
 ;; generic setter for use by puzzle-specific initialization functions
-(define: (init-all! [ptv : (Vectorof (Listof Any))] [s : prepos] [t : TileSpec] [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)] [pzlname : String]) : Void
+(define: (init-all! [ptv : (Vectorof (Listof Any))] [s : prepos] [t : TileSpec] [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
   (init-cell-loc-maps! nrow ncol invalid)
-  (set! *puzzle-name* pzlname)
   (set! *bh* nrow)
   (set! *bw* ncol)
   (set! *bsz* (cast (- (* nrow ncol) (length invalid)) Byte))
@@ -207,6 +169,7 @@
 (define: (loc-to-cell [i : Loc]) : Cell
   (vector-ref *loc-to-cell* i))
 
+
 ;;--------------------------------------------------------------------------------
 
 ;; charify: bw-position -> bytearray
@@ -238,8 +201,6 @@
 
 ;; bw-positionify: (listof (cons tile-id (listof cell))) -> bw-position
 ;; create a bitwise-'position' representation of a board state based on the given start-list pre-position format
-;;*** called only during initialization
-;****** WORKING HERE
 (define: (bw-positionify [old-position : (Listof (Pairof Byte (Listof Cell)))]) : BW-Position
   (for/vector: : BW-Position ([pspec : (Pairof Byte (Listof Cell)) (in-list old-position)]
                               [i : Byte *num-piece-types*])
@@ -291,180 +252,21 @@
 
 
 ;;------------------------------------------------------------------------------------------------------
-;; BLOCK-10 PUZZLE INIT (variant 12)
-(define: *block10-piece-types* : (Vectorof (Listof Any))
-   '#((reserved-spaces)               ; 0 reserved for spaces in actual position representation
-             ((0 . 0)(0 . 1)(1 . 0)(1 . 1))  ; 1  2x2
-             ((0 . 0)(0 . 1)(1 . 0))         ; 2  Upper Left pointing L
-             ((0 . 0)(1 . -1)(1 . 0))        ; 3  Lower Right pointing L
-             ((0 . 0)(1 . 0))                ; 4  2x1 vertical rectangle
-             ((0 . 0))))                     ; 5  1x1 unit square
-
-(define: *block10-start* : prepos ; variant 12
-  (prepos (list (tspec 1 '(4 . 1))
-                (tspec 2 '(3 . 0))
-                (tspec 3 '(1 . 3))
-                (tspec 4 '(1 . 0))
-                (tspec 4 '(3 . 3))
-                (tspec 5 '(2 . 1))
-                (tspec 5 '(3 . 2))
-                (tspec 5 '(5 . 0))
-                (tspec 5 '(5 . 3)))
-          '((0 . 1) (0 . 2) (1 . 1) (1 . 2)) ; spaces
-          ))
-
-(define *block10-name* "block10v12")
-(define: *block10-target* : TileSpec (cons 1 (cons 0 1)))
-(define *block10-invalid-cells* '((0 . 0) (0 . 3)))
 
 (define (block10-init)
-  (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells* *block10-name*))
-
-;;------------------------------------------------------------------------------------------------------
-;; CLIMB-12 PUZZLE INIT
-;; piece-type is implicit in position within list, each pair specifies the cells of the piece
-;; and their location relative to the (arbitrary) origin of that piece, (0 0).
-(define: *climb12-piece-types* : (Vectorof (Listof Any))
-  '#((reserved-spaces)
-     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
-     ((0 . 0)(0 . 1)(1 . 0))                   ; 2  Upper Left pointing L
-     ((0 . 0)(1 . -1)(1 . 0))                  ; 3  Lower Right pointing L
-     ((0 . 0)(1 . 0))                          ; 4  2x1 vertical rectangle
-     ((0 . 0)(0 . 1))                          ; 5  1x2 horizontal rectangle
-     ((0 . 0))))                               ; 6  1x1 unit square
-
-;; specify board-state by triples: piece-type, board-row, board-col
-(define: *climb12-start* : prepos
-  (prepos (list (tspec 1 '(4 . 2))
-                (tspec 2 '(2 . 1))
-                (tspec 3 '(2 . 3))
-                (tspec 4 '(1 . 0))
-                (tspec 4 '(1 . 4))
-                (tspec 5 '(4 . 0))
-                (tspec 5 '(4 . 3))
-                (tspec 6 '(3 . 0))
-                (tspec 6 '(3 . 4))
-                (tspec 6 '(5 . 0))
-                (tspec 6 '(5 . 4)))
-          '((0 . 2) (1 . 1) (1 . 2) (1 . 3))  ; spaces
-          ))
-
-;; specify target as triple: piece-type, board-row, board-col
-(define *climb12-name* "climb12")
-(define: *climb12-target* : TileSpec (cons 1 (cons 0 2)))
-(define *climb12-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
+  (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells*))
 
 (define (climb12-init)
-  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells* *climb12-name*))
-
-;;------------------------------------------------------------------------------------------------------
-;; CLIMB-15 PUZZLE INIT
-;; (variation 1: 104 moves)
-(define: *climb15-piece-types* : (Vectorof (Listof Any))
-  '#((reserved-spaces)
-     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
-     ((0 . 0)(0 . 1)(1 . 0))                   ; 2  Upper Left pointing L
-     ((0 . 0)(1 . -1)(1 . 0))                  ; 3  Lower Right pointing L
-     ((0 . 0)(1 . 0)(1 . 1))                   ; 4  Lower Left pointing L
-     ((0 . 0)(0 . 1)(1 . 1))                   ; 5  Upper Right pointing L
-     ((0 . 0)(1 . 0))                          ; 6  2x1 vertical rectangle
-     ((0 . 0)(0 . 1))                          ; 7  1x2 horizontal rectangle
-     ((0 . 0))                                 ; 8  1x1 unit square
-     ((0 . 0)(0 . 1)(1 . 0)(1 . 1))))          ; 9  2x2 square
-     
-(define: *climb15-start* : prepos
-  (prepos (list (tspec 1 '(6 . 2))
-                (tspec 2 '(2 . 0))
-                (tspec 3 '(2 . 2))
-                (tspec 4 '(4 . 2))
-                (tspec 5 '(4 . 3))
-                (tspec 6 '(2 . 3))
-                (tspec 6 '(2 . 4))
-                (tspec 7 '(6 . 0))
-                (tspec 7 '(6 . 3))
-                (tspec 8 '(1 . 0))
-                (tspec 8 '(1 . 4))
-                (tspec 8 '(7 . 0))
-                (tspec 8 '(7 . 4))
-                (tspec 9 '(4 . 0)))
-          '((0 . 2)(1 . 1)(1 . 2)(1 . 3))
-          ))
-
-(define *climb15-name* "climb15")
-(define: *climb15-target* : TileSpec (cons 1 (cons 0 2)))
-(define *climb15-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
+  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells*))
 
 (define (climb15-init)
-  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells* *climb15-name*))
-
-;;------------------------------------------------------------------------------------------------------
-;; CLIMB-24-PRO PUZZLE INIT
-;; 22? moves
-;;  From Minoru Abe -- http://www.johnrausch.com/slidingblockpuzzles/abe.htm
-;;           _
-;; 0   _____|x|_____
-;; 1  |___|x x x|___|
-;; 2  |   |_____|   |
-;; 3  |___| |_  |___|
-;; 4  |_  |___|_|  _|
-;; 5  | |_| |_| |_| |
-;; 6  |_| |_|_|_| |_|
-;; 7  |___|_____|___|
-;; 8  |   |_| |_|   |
-;; 9  |___|_____|___|
-
-(define *climbpro24-name* "climbpro24")
-(define: *climbpro24-target* : TileSpec (cons 1 (cons 0 3)))
-(define *climbpro24-invalid-cells* '((0 . 0)(0 . 1)(0 . 2)(0 . 4)(0 . 5)(0 . 6)))
-
-(define: *climbpro24-piece-types* : (Vectorof (Listof Any))
-  '#((reserved-spaces)
-     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
-     ((0 . 0)(0 . 1)(1 . 0)(1 . 1))            ; 2  2x2 square
-     ((0 . 0)(0 . 1)(1 . 0))                   ; 3  Upper Left pointing L
-     ((0 . 0)(0 . 1)(1 . 1))                   ; 4  Upper Right pointing L
-     ((0 . 0)(1 . -1)(1 . 0))                  ; 5  Lower Right pointing L
-     ((0 . 0)(1 . 0)(1 . 1))                   ; 6  Lower Left pointing L
-     ((0 . 0)(1 . 0))                          ; 7  2x1 vertical rectangle
-     ((0 . 0)(0 . 1))                          ; 8  1x2 horizontal rectangle
-     ((0 . 0)(0 . 1)(0 . 2))                   ; 9  1x3 horizontal rectangle
-     ((0 . 0))))                               ; 10 1x1 unit square
-
-(define: *climbpro24-start* : prepos
-  (prepos (list (tspec 1 '(8 . 3))    ; T piece
-                (tspec 2 '(2 . 0))    ; 2x2
-                (tspec 2 '(2 . 5))    ; 2x2
-                (tspec 2 '(8 . 0))    ; 2x2
-                (tspec 2 '(8 . 5))    ; 2x2
-                (tspec 3 '(4 . 5))    ; up-left L
-                (tspec 4 '(3 . 3))    ; up-right L
-                (tspec 4 '(4 . 0))    ; up-right L
-                (tspec 5 '(6 . 1))    ; down-right L
-                (tspec 6 '(3 . 2))    ; down-left L
-                (tspec 6 '(6 . 5))    ; down-left L
-                (tspec 7 '(5 . 0))    ; 2x1 (vertical)
-                (tspec 7 '(5 . 2))    ; 2x1 (vertical)
-                (tspec 7 '(5 . 4))    ; 2x1 (vertical)
-                (tspec 7 '(5 . 6))    ; 2x1 (vertical)
-                (tspec 8 '(1 . 0))    ; 1x2 (horizontal)
-                (tspec 8 '(1 . 5))    ; 1x2 (horizontal)
-                (tspec 9 '(2 . 2))    ; 1x3 (horizontal)
-                (tspec 9 '(7 . 2))    ; 1x3 (horizontal)
-                (tspec 10 '(5 . 3))   ; 1x1
-                (tspec 10 '(6 . 3))   ; 1x1
-                (tspec 10 '(8 . 2))   ; 1x1
-                (tspec 10 '(8 . 4))   ; 1x1
-                )
-          '((0 . 3)(1 . 2)(1 . 3)(1 . 4))
-          ))
+  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells*))
 
 (define (climbpro24-init)
-  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells* *climbpro24-name*))
+  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells*))
 
-
-;;------------------------------------------------------------------------------------------------------
-; for local testing
-;(block10-init)
-;(climb12-init)
-;(climb15-init)
-;(climbpro24-init)
+(case *puzzle-name*
+  (("climb12") (climb12-init))
+  (("climb15") (climb15-init))
+  (("climbpro24") (climbpro24-init))
+  (else (error 'stp-init "puzzle-name missing or unknown in stpconfigs/configenv.rkt")))

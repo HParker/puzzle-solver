@@ -580,12 +580,8 @@
               (make-fringe *share-store* (list (make-filespec "fringe-d0" 1 (file-size d0) *share-store*)) 1)
               1)))
 
-;(block10-init)
-(climb12-init)
-;(climb15-init)
-;(climbpro24-init)
 ;(compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*))
-(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" (get-*puzzle-name*)))
+(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
 
 ;; canonicalize the *start* blank-configuration
 (let* ([spacelist (bwrep->list (intify (hc-position-bs (get-*start*)) 0 4))]

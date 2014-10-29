@@ -3,9 +3,10 @@
 (require
  srfi/25 ;; multi-dimensional arrays
  racket/list
+ racket/set
  racket/vector
- ;test-engine/racket-tests
  ;racket/generator
+ "stpconfigs/configenv.rkt"
  "stp-init.rkt"
  )
                   
@@ -88,7 +89,7 @@
 
 ;; translate-piece: (listof cells) trans-spec -> (listof cells)
 (define (translate-piece cell-list trans)
-  (for/list ([cell (in-list cell-list)])
+  (for/list ([cell cell-list])
     (translate-cell cell trans)))
 
 
@@ -239,9 +240,5 @@
           [(and (zero? hrs) (positive? min)) (format "~a min., ~a sec." min sec)]
           [else (format "~a hrs., ~a min., ~a sec." hrs min sec)])))
 
-
-;(block10-init)
-;(climb15-init)
 ;(compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*))
 ;(expand (get-*start*))
-;(test)

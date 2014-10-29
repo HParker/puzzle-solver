@@ -1,4 +1,4 @@
-#lang racket
+#lang typed/racket/base
 
 (provide (all-defined-out))
 
@@ -16,9 +16,11 @@ Create a link named "configenv.rkt" to this file if on cluster
 
 |#
 
-(define *master-name* "wcp")
-(define *local-store* "/state/partition1/fringefiles/")
-(define *share-store* "/share/data2/fringefiles/")
-(define *n-processors* 34)
-(define *late-duplicate-removal* #f)
-
+(define: *master-name* : String "wcp")
+(define: *local-store* : String "/state/partition1/fringefiles/")
+(define: *share-store* : String "/share/data2/fringefiles/")
+(define: *n-processors* : Number 34)
+(define: *late-duplicate-removal* : Boolean #f)
+(define: *puzzle-name* : String "climb12")
+;(define: *puzzle-name* : String "climb15")
+;(define: *puzzle-name* : String "climbpro24")
