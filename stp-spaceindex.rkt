@@ -15,6 +15,8 @@
 
 (define *spaceindex* "the hashtable to hold the possible moves indexed by space configurations")
 (define ret-false (lambda () #f))
+;(define *piecelocvec* (make-vector *bsz* #f));; vector boolean representing used move locations where the index is the location to which a single piece was moved
+  
 
 (define (choose n k)
   (if (>= k (/ n 2))
@@ -262,7 +264,6 @@
          [possible-moves-hash (hash-ref *spaceindex* canonical-blank-config)]
          ;
          [expanded-ptr exp-ptr]
-         [target-hc-pos 'mutable-hc-pos-in-*expansion-space*]
          )
     ;(printf "index: ~a~%" canonical-blank-config)
     (for* ([i (in-range 4 *num-pieces*)]
