@@ -21,10 +21,6 @@
 |#
 (provide (all-defined-out))
 
-;; a vector of mutable pairs holding piece-type and location
-(define *expandbuf* (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*) (lambda (_) (mcons 0 (make-bytes *num-pieces*)))))
-
-
 ;; hcposition<?: hc-position hc-position -> boolean
 (define (hcposition<? p1 p2)
   (or (< (hc-position-hc p1) (hc-position-hc p2))
@@ -65,11 +61,11 @@
 ;; where the vector is the piece-type specification, *piece-types*, and the ints are the width and height
 (define (compile-ms-array! piece-type-specs bh bw)
   (when (or (zero? bh) (zero? bw)) (error 'compile-ms-array "must be called after an appropriate initialization call"))
-  (let ((a (make-array (shape 1 (vector-length piece-type-specs) 0 *bsz* 0 4))))
+  (let ((a (make-array (shape 1 (vector-length piece-type-specs) 0 (get-*bsz*) 0 4))))
     (for ([piece-type-spec (in-vector (vector-drop piece-type-specs 1))]
           [pti (in-range 1 (vector-length piece-type-specs))])
-      (for ([loc *bsz*])
-        (for ([dir (in-range (length *prim-move-translations*))]
+      (for ([loc (get-*bsz*)])
+        (for ([dir (in-range *num-prim-move-translations*)]
               [dir-trans (in-list *prim-move-translations*)])
           (let* ([loc-cell (loc-to-cell loc)]
                  [start-spots (translate-piece piece-type-spec loc-cell)]
@@ -141,7 +137,7 @@
           [(= (hc-position-hc x) (hc-position-hc (vector-ref v mid))) (vector-ref v mid)]
           [(compare? x (vector-ref v mid)) (vec-member? v x compare? low mid)]
           [else (vec-member? v x compare? (add1 mid) high)])))
-
+#|
 ;; update-expandbuf!: int bytestring int int move-schema int -> void
 ;; update the *expandbuf* vector with the new location and altered bytestring
 (define (update-expandbuf! bufindex src-bspos nu-ploc space-int mv-schema piece-type)
@@ -172,7 +168,7 @@
   (let* ([mv-schema empty]
          [space-int (intify (mcdr loc-pos-pair) 0 *num-spaces*)])
     (for ([dir-trans (in-list *prim-move-translations*)]
-          [dir-i (in-range (length *prim-move-translations*))]
+          [dir-i (in-range *num-prim-move-translations*)]
           #:when (begin (set! mv-schema (array-ref *ms-array* piece-type (mcar loc-pos-pair) dir-i))
                         (and mv-schema
                              (not (vector-ref plocvec (fourth mv-schema)))
@@ -199,6 +195,7 @@
                                                expcount-b piecelocvec))])
     ;; until no further moves of this piece
     ((= new-positions-to-check start-check))))
+|#
 
 ;; bw-valid-move?: number number -> boolean
 ;; determine if the current location of the spaces supports a move's prerequisites given as space-prereq
@@ -208,12 +205,12 @@
   
 ;; onboard?: cell -> boolean
 (define (onboard? c)
-  (and (< -1 (car c) *bh*)
-       (< -1 (cdr c) *bw*)
+  (and (< -1 (car c) (get-*bh*))
+       (< -1 (cdr c) (get-*bw*))
        (cell-to-loc c)))
 ;; loc-onboard?: loc -> boolean
 (define (loc-onboard? loc)
-  (< -1 loc *bsz*))
+  (< -1 loc (get-*bsz*)))
 
 ;;------------------------------------------------------------------------------------
 
@@ -221,8 +218,8 @@
 ;;****** relies on special-case of goal where single tile of type with only one tile needs to be in certain location
 (define (is-goal? hcp)
   ;(and #f
-       (= (bytes-ref (hc-position-bs hcp) (car *target*))
-          (cdr *target*))
+       (= (bytes-ref (hc-position-bs hcp) (car (get-*target*)))
+          (cdr (get-*target*)))
   ;)
 )
 
@@ -245,6 +242,6 @@
 
 ;(block10-init)
 ;(climb15-init)
-;(compile-ms-array! *piece-types* *bh* *bw*)
-;(expand *start*)
+;(compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*))
+;(expand (get-*start*))
 ;(test)

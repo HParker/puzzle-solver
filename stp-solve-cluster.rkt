@@ -96,10 +96,10 @@
          [expand-them (for ([p-to-expand current-fringe-vec])
                         (set! exp-ptr (expand* p-to-expand exp-ptr)))]
          [res (set->list (for/set ([i exp-ptr]
-                                   #:unless (or (set-member? prev-fringe-set (vector-ref *expansion-space* i))
-                                                (position-in-vec? current-fringe-vec (vector-ref *expansion-space* i))))
-                           (when (is-goal? (vector-ref *expansion-space* i)) (set! *found-goal* (vector-ref *expansion-space* i)))
-                           (vector-ref *expansion-space* i)))]
+                                   #:unless (or (set-member? prev-fringe-set (vector-ref (get-*expansion-space*) i))
+                                                (position-in-vec? current-fringe-vec (vector-ref (get-*expansion-space*) i))))
+                           (when (is-goal? (vector-ref (get-*expansion-space*) i)) (set! *found-goal* (vector-ref (get-*expansion-space*) i)))
+                           (vector-ref (get-*expansion-space*) i)))]
          )
     #|(printf "Finished the work packet generating a set of ~a positions~%" (set-count res))
     (for ([p res])
@@ -250,19 +250,19 @@
          [write-time 0])
     ;; scrub the last part of the vector with bogus positions
     #|
-    (for ([i (in-range pcount (vector-length *expansion-space*))])
-      (set! hc-to-scrub (vector-ref *expansion-space* i))
+    (for ([i (in-range pcount (vector-length (get-*expansion-space*)))])
+      (set! hc-to-scrub (vector-ref (get-*expansion-space*) i))
       (set-hc-position-hc! hc-to-scrub *most-positive-fixnum*)    ;; make vector-sort! put these at the very end, but if a positions has *most-positive-fixnum* ...
       (bytes-copy! (hc-position-bs hc-to-scrub) 0 #"~~IgnoreMe")) ;; #\~ (ASCII character 126) is greater than any of our positions
     |#
     ;; sort the vector
     (set! sort-time (current-milliseconds))
-    ;(vector-sort! hcposition<? *expansion-space*)
-    (vector-sort! *expansion-space* hcposition<? 0 pcount)
+    ;(vector-sort! hcposition<? (get-*expansion-space*))
+    (vector-sort! (get-*expansion-space*) hcposition<? 0 pcount)
     (set! sort-time (- (current-milliseconds) sort-time))
     ;; write the first pcount positions to the file
     (set! write-time (current-milliseconds))
-    (set! this-batch (write-fringe-to-disk *expansion-space* fullpath pcount #t))
+    (set! this-batch (write-fringe-to-disk (get-*expansion-space*) fullpath pcount #t))
     (set! write-time (- (current-milliseconds) write-time))
     ;; return the two values: augmented list of filespecs, and the incremented number of duplicates eliminated during writing
     (values (cons (make-filespec f this-batch (file-size fullpath) *local-store*)
@@ -584,22 +584,22 @@
 (climb12-init)
 ;(climb15-init)
 ;(climbpro24-init)
-;(compile-ms-array! *piece-types* *bh* *bw*)
-(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
+;(compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*))
+(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" (get-*puzzle-name*)))
 
 ;; canonicalize the *start* blank-configuration
-(let* ([spacelist (bwrep->list (intify (hc-position-bs *start*) 0 4))]
+(let* ([spacelist (bwrep->list (intify (hc-position-bs (get-*start*)) 0 4))]
        [cbref (rcpair->rcbyte (loc-to-cell (car spacelist)))]
        [canonical-spaces (apply canonize spacelist)])
-  (bytes-set! (hc-position-bs *start*) 0 cbref)
-  (bytes-copy! (hc-position-bs *start*) 1 canonical-spaces)
-  (hc-position-bs *start*))
+  (bytes-set! (hc-position-bs (get-*start*)) 0 cbref)
+  (bytes-copy! (hc-position-bs (get-*start*)) 1 canonical-spaces)
+  (hc-position-bs (get-*start*)))
 
 ;#|
 (module+ main
   ;; Switch between these according to if using the cluster or testing on multi-core single machine
   (connect-to-riot-server! *master-name*)
-  (define search-result (time (start-cluster-fringe-search *start*)))
+  (define search-result (time (start-cluster-fringe-search (get-*start*))))
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d115-" 32 "fill-in-path-to-fringe-segments")
                                         (make-fringe-from-files "fringe-segment-d116-" 32 "fill-in-path-to-fringe-segments")
@@ -614,4 +614,4 @@
   )
 ;|#
 
-;(time (start-cluster-fringe-search *start*))
+;(time (start-cluster-fringe-search (get-*start*)))

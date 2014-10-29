@@ -193,13 +193,13 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 
 ;; write-bs->file: byte-string [output-port] [number] -> void or error
 ;; writes the bs to the ofile and checks to make sure the optionally-specified number of bytes were written
-(define (write-bs->file bspos [oprt (current-output-port)] [num-bytes *num-pieces*])
+(define (write-bs->file bspos [oprt (current-output-port)] [num-bytes (get-*num-pieces*)])
   (unless (= (write-bytes bspos oprt) num-bytes)
     (error "write-bs->file: failed to write an exact position")))
 
 ;; read-bs->hcpos: input-port [number] -> hc-position
 ;; read a bytestring from the given input-port and create hc-position
-(define (read-bs->hcpos in [num-bytes *num-pieces*])
+(define (read-bs->hcpos in [num-bytes (get-*num-pieces*)])
   (let ([bspos (read-bytes num-bytes in)])
     (if (eof-object? bspos) bspos (make-hcpos bspos))))
 
@@ -265,7 +265,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; position-count-in-file: string -> number
 ;; reports the number of positions in the given fringe file assuming the file was written with write-fringe-to-disk
 (define (position-count-in-file f)
-  (/ (file-size f) *num-pieces*))
+  (/ (file-size f) (get-*num-pieces*)))
                     
 ;; check-sorted-fringe?: string -> boolean
 ;; assuming the string, f, points to a sorted file of positions, check to make sure they are sorted

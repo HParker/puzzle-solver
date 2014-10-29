@@ -15,31 +15,50 @@
          (struct-out hc-position)
          ;hc-position hc-position-hc hc-position-bs hc-position? set-hc-position-hc!
          make-hcpos
-         *prim-move-translations* *charify-offset* *max-board-size*
-         *puzzle-name*
-         *invalid-cells*
-         *num-piece-types* *piece-types* *num-pieces*
-         *bs-ptype-index*
-         *target* *bw* *bh* *bsz*
-         *expansion-space*
-         *piecelocvec* 
-         *start*
-         *piece-type-template*
-         *num-spaces*
-         charify-int intify
+         *num-prim-move-translations*
+         *prim-move-translations*
+         *charify-offset*
+         *puzzle-name* get-*puzzle-name*
+         *piece-types* get-*piece-types*
+         *num-pieces* get-*num-pieces*
+         *bs-ptype-index* get-*bs-ptype-index*
+         *target* get-*target*
+         *bw* get-*bw*
+         *bh* get-*bh*
+         *bsz* get-*bsz*
+         *expansion-space* get-*expansion-space*
+         *start* get-*start*
+         *piece-type-template* get-*piece-type-template*
+         *num-spaces* get-*num-spaces*
+         *piecelocvec* get-*piecelocvec*
+         charify-int 
+         intify
          ;old-positionify ;** temp for testing
          list->bwrep ;; used only during initialization in compile-ms-array! via better-move-schema
          bwrep-direct
          bwrep->list
          ;bwrep->list
-         cell-to-loc *cell-to-loc*
-         loc-to-cell *loc-to-cell*
+         cell-to-loc
+         loc-to-cell
          block10-init
          climb12-init
          climb15-init
          climbpro24-init
-         report-puzzle-name
-         abox)
+         )
+
+(define: (get-*puzzle-name*) : String *puzzle-name*)
+(define: (get-*piece-types*) : (Vectorof (Setof Any)) *piece-types*)
+(define: (get-*num-pieces*) : Integer *num-pieces*)
+(define: (get-*bs-ptype-index*) : (Vectorof Byte) *bs-ptype-index*)
+(define: (get-*target*) : (Pairof Byte Byte) *target*)
+(define: (get-*bw*) : Byte *bw*)
+(define: (get-*bh*) : Byte *bh*)
+(define: (get-*bsz*) : Byte *bsz*)
+(define: (get-*expansion-space*) : (Vectorof hc-position) *expansion-space*)
+(define: (get-*start*) : hc-position  *start*)
+(define: (get-*piece-type-template*) : (Vectorof Byte) *piece-type-template*)
+(define: (get-*num-spaces*) : Byte *num-spaces*)
+(define: (get-*piecelocvec*) : (Vectorof Boolean) *piecelocvec*)
 
 
 ;; ******************************************************************************
@@ -90,6 +109,7 @@
 ;(define EXPAND-SPACE-SIZE 2000000)
 
 ;; move trans for up, right, down and left respectively
+(define: *num-prim-move-translations* : Integer 4)
 (define: *prim-move-translations* : (Listof (Pairof Fixnum Fixnum)) '((-1 . 0) (0 . 1) (1 . 0) (0 . -1)))
 (define: *charify-offset* : Byte 48)
 (define: *max-board-size* : Byte 64)
@@ -109,10 +129,13 @@
 (define: *bh* : Byte 0)
 (define: *bsz* : Byte 0)
 (define: *expansion-space* : (Vectorof hc-position) (vector))
-(define: *piecelocvec* : (Vectorof Boolean) (vector));; vector boolean representing used move locations where the index is the location to which a single piece was moved
 ;(define *bsbuffer* #"") ;; a reusable buffer for holding expansions of a given position
 (define: *cell-to-loc* : (Mutable-Array (U Byte False)) (mutable-array 0 : (U Byte False)))
 (define: *loc-to-cell* : (Vectorof Cell) (vector))
+(define: *piecelocvec* : (Vectorof Boolean) (make-vector 42 #f));; vector boolean representing used move locations where the index is the location to which a single piece was moved
+;; a vector of mutable pairs holding piece-type and location
+;;(define: *expandbuf* : (Vectorof (MPairof Byte Bytes)) (vector (mcons 1 #"0")))
+
 
 
 ;; init-all!: piece-type-vector prepos target N N (listof (N . N)) string -> void
@@ -124,11 +147,12 @@
   (set! *bw* ncol)
   (set! *bsz* (cast (- (* nrow ncol) (length invalid)) Byte))
   (set! *num-piece-types* (cast (vector-length ptv) Byte)) ;; must come before bw-positionify/(pre-compress)
+  (set! *piecelocvec* (cast (make-vector *bsz* #f) (Vectorof Boolean)))
   (set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof Any))));****
   #|(set! *piece-types* (for/vector: : (Vectorof (Setof Any)) ([cell-specs : (Listof Any) ptv])
                         (list->set cell-specs)))|#
   (set! *invalid-cells* invalid)
-  (set! *num-pieces* (cast (+ (length (prepos-tspecs s)) -1 (length (prepos-spaces s))) Byte)) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
+  (set! *num-pieces* (cast (+ (length (prepos-tspecs s)) (length (prepos-spaces s))) Byte)) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
   (set! *start* (make-hcpos (charify (bw-positionify (pre-compress s)))))
   (set! *piece-type-template* (for/vector: : (Vectorof Byte)
                                 ([pt : (Listof Loc) (old-positionify (bw-positionify (pre-compress s)))])
@@ -136,20 +160,11 @@
   (set! *num-spaces* (vector-ref *piece-type-template* 0))
   (set! *expansion-space* (cast (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*))))
                                 (Vectorof hc-position)))
-  (set! *piecelocvec* (cast (make-vector *bsz* #f) (Vectorof Boolean)))
   #|
-  (set! *bs-ptype-index*
-        (for/vector: : (Vectorof Byte) #:length *num-pieces* 
-          ([i : Byte *num-pieces*])
-          (for/last: : Byte 
-            ([ptindex-for-i : Byte (in-range *num-piece-types*)] ;; at most, once for each piece type
-             #:break (< i (for/sum: : Byte ;; sum the number of pieces that have alread been covered
-                            ([ptype-count : Byte (in-vector *piece-type-template*)]
-                             [x : Byte (in-range ptindex-for-i)])
-                            ptype-count)))
-            ptindex-for-i)))
-  |#
-  
+  (set! *expandbuf* (cast (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*)
+                                        (lambda (_) (cast (mcons 0 (make-bytes *num-pieces*)) (MPairof Byte Bytes)))) 
+                          (Vectorof (MPairof Byte Bytes))))
+|#
   (set! *bs-ptype-index*
         (cast 
          (list->vector
@@ -448,10 +463,8 @@
 
 
 ;;------------------------------------------------------------------------------------------------------
-;(block10-init) ; for local testing
+; for local testing
+;(block10-init)
 ;(climb12-init)
 ;(climb15-init)
 ;(climbpro24-init)
-(define (report-puzzle-name) *puzzle-name*)
-(define abox (box 3))
-;(define: (incbox [Box : b]) (set-box! b (add1 (unbox b))))

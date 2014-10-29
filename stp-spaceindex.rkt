@@ -16,6 +16,7 @@
 (define *spaceindex* "the hashtable to hold the possible moves indexed by space configurations")
 (define ret-false (lambda () #f))
 
+
 ;;------------------------------------------------------------------------------------------------------
 ;; Support for creating an index from blank configurations to valid move schemas
 
@@ -75,10 +76,10 @@
 ;; rcpair->rcbyte: (N . N) -> byte
 ;; convert a row-col pair where the row value in range [0,*bh*) and col in range [-*bw*,+*bw*] into a rcbyte
 (define (rcpair->rcbyte rcp)
-  (when (or (< (car rcp) -2) (< (cdr rcp) (- *bw*)))
+  (when (or (< (car rcp) -2) (< (cdr rcp) (- (get-*bw*))))
     (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
   (+ (bitwise-ior (arithmetic-shift (+ (car rcp) 2) 4) ;; the two is for the negative rows, the 4 is the high-four bits
-                  (+ *bw* (cdr rcp)))
+                  (+ (get-*bw*) (cdr rcp)))
      *charify-offset*))
 
 ;; rcbyte->rcpair: byte -> (N . N)
@@ -86,7 +87,7 @@
 (define (rcbyte->rcpair b)
   (let ([decharified-b (- b *charify-offset*)])
     (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
-          (- (bitwise-and decharified-b 15) *bw*))))
+          (- (bitwise-and decharified-b 15) (get-*bw*)))))
           
 ;; register-loc-to-pair: N (N . N) -> (N . N)
 ;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
@@ -115,7 +116,7 @@
         (if (file-exists? fname)
             (with-input-from-file fname read)
             (let ([ht (make-hash)]) ; mutable hash-table of possible moves indexed by space configuration
-              (compile-ms-array! *piece-types* *bh* *bw*)
+              (compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*))
               (all-space-config ht)
               (with-output-to-file fname (lambda () (write ht)))
               ht))))
@@ -123,10 +124,10 @@
 ;; all-space-config: (hash-table: spaceint (vectorof EBMS)) -> void
 ;; populates the hash of possible moves for indexed by all possible configurations of blanks
 (define (all-space-config ht)
-  (for* ([b1 (in-range (- *bsz* 3))] ;; board-size minus the remaining blanks that still need to be placed
-         [b2 (in-range (add1 b1) (- *bsz* 2))]
-         [b3 (in-range (add1 b2) (- *bsz* 1))]
-         [b4 (in-range (add1 b3) *bsz*)]
+  (for* ([b1 (in-range (- (get-*bsz*) 3))] ;; board-size minus the remaining blanks that still need to be placed
+         [b2 (in-range (add1 b1) (- (get-*bsz*) 2))]
+         [b3 (in-range (add1 b2) (- (get-*bsz*) 1))]
+         [b4 (in-range (add1 b3) (get-*bsz*))]
          )
     (let ([spaceint (bwrep-direct b1 b2 b3 b4)]
           [canonical-blankindex (canonize b1 b2 b3 b4)]
@@ -140,8 +141,8 @@
 ;; collect all the possible even-better-move-schemas for a given space configuration
 ;; within a hash-table indexed by the combination of piece-type and location
 (define (one-space-config ht spaceint config-ref-pair blank-config)
-  (for* ([ptype (in-range 1 (vector-length *piece-types*))]
-         [loc (in-range *bsz*)])
+  (for* ([ptype (in-range 1 (vector-length (get-*piece-types*)))]
+         [loc (in-range (get-*bsz*))])
       (vector-set! *piecelocvec* loc #t)
       (let ([inner-search-result (inner-search ht spaceint spaceint ptype loc loc *piecelocvec*
                                                0 0 0 
@@ -202,7 +203,7 @@
        ; and
        (let ([loc-cell (loc-to-cell loc)]
              [translated-base-cell "piece cells translated to loc-cell"])
-         (for/and ([base-cell (in-set (vector-ref *piece-types* ptype))])
+         (for/and ([base-cell (in-set (vector-ref (get-*piece-types*) ptype))])
            (set! translated-base-cell (translate-cell base-cell loc-cell))
            (and 
             ;; cell-on-board
@@ -218,7 +219,7 @@
 ;; generate-and-write-new-pos: N byte-string EBMS N N (int . int) -> void
 ;; generate the new position and write it into the expansion buffer
 (define (generate-and-write-new-pos bufindex src-bspos an-ebms piece-type ploc0 crc)
-  (let* ([the-hcpos (vector-ref *expansion-space* bufindex)]
+  (let* ([the-hcpos (vector-ref (get-*expansion-space*) bufindex)]
          [targetbs (hc-position-bs the-hcpos)]
          [piece-start (for/sum ([i (in-range piece-type)]) (vector-ref *piece-type-template* i))]
          [piece-end (+ piece-start (vector-ref *piece-type-template* piece-type))]
@@ -256,23 +257,22 @@
          [possible-moves-hash (hash-ref *spaceindex* canonical-blank-config)]
          ;
          [expanded-ptr exp-ptr]
-         [target-hc-pos 'mutable-hc-pos-in-*expansion-space*]
          )
     ;(printf "index: ~a~%" canonical-blank-config)
-    (for* ([i (in-range 4 *num-pieces*)]
+    (for* ([i (in-range 4 (get-*num-pieces*))]
            )
-      (let* ([ptype (vector-ref *bs-ptype-index* i)]
+      (let* ([ptype (vector-ref (get-*bs-ptype-index*) i)]
              [ploc0 (- (bytes-ref bs i) *charify-offset*)]
              [canonical-pieceloc
               (let ([rlocp (register-loc-to-pair ploc0 config-ref-cell)])
                 ;(printf "canonical-pieceloc: ~a~%" rlocp)
-                #|(when (or (< (car rlocp) -2) (< (cdr rlocp) (- *bw*)))
+                #|(when (or (< (car rlocp) -2) (< (cdr rlocp) (- (get-*bw*))))
                   (error (format "expand*: strange registered pieceloc as ~a from ploc0=~a which is cell=~a for blank-config=~a and ref=~a"
                                  rlocp ploc0 (loc-to-cell ploc0) canonical-blank-config config-ref-cell)))|#
                 rlocp)]
              [moves-for-ptype-at-location
               (and (>= (car canonical-pieceloc) -2)
-                   (>= (cdr canonical-pieceloc) (- *bw*))
+                   (>= (cdr canonical-pieceloc) (- (get-*bw*)))
                    (hash-ref possible-moves-hash 
                              (bytes ptype (rcpair->rcbyte canonical-pieceloc)) ;(cons ptype canonical-pieceloc)
                              ret-false))])
@@ -291,17 +291,17 @@
 ;(climb12-init)
 ;(climb15-init)   ; 
 ;(climbpro24-init)
-;(time (compile-ms-array! *piece-types* *bh* *bw*))
-;(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*)))
+;(time (compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*)))
+;(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" (get-*puzzle-name*))))
 
 ;; canonicalize the *start* blank-configuration
 #|
-(let* ([spacelist (bwrep->list (intify (hc-position-bs *start*) 0 4))]
+(let* ([spacelist (bwrep->list (intify (hc-position-bs (get-*start*)) 0 4))]
        [cbref (rcpair->rcbyte (loc-to-cell (car spacelist)))]
        [canonical-spaces (apply canonize spacelist)])
-  (bytes-set! (hc-position-bs *start*) 0 cbref)
-  (bytes-copy! (hc-position-bs *start*) 1 canonical-spaces)
-  (hc-position-bs *start*))
+  (bytes-set! (hc-position-bs (get-*start*)) 0 cbref)
+  (bytes-copy! (hc-position-bs (get-*start*)) 1 canonical-spaces)
+  (hc-position-bs (get-*start*)))
 |#
-;(expand* *start* 0)
+;(expand* (get-*start*) 0)
 ;(test)

@@ -88,7 +88,7 @@
 
 ;; fake-buffer: vector of bytestrings for output
 (define fb-capacity 2000000)
-(define fakebuffer (make-vector (+ fb-capacity 200) (make-bytes (add1 *num-pieces*))))
+(define fakebuffer (make-vector (+ fb-capacity 200) (make-bytes (add1 (get-*num-pieces*)))))
 (define fb-ptr 0)
 
 ;; write-to-fb: a*pos -> void
@@ -110,7 +110,7 @@
         (for ([n fb-ptr]
               [p fakebuffer]
               #:unless (bytes=? (subbytes p 1) last-pos))
-          (write-bs->file p (current-output-port) (add1 *num-pieces*))
+          (write-bs->file p (current-output-port) (add1 (get-*num-pieces*)))
           (set! actually-written (add1 actually-written))))
       #:exists 'replace)
     (set! fb-ptr 0)
@@ -139,23 +139,23 @@
         [last #"nonprevious"])
     (with-output-to-file ofile
       (lambda ()
-        (let mrg ([p1 (read-bytes (add1 *num-pieces*) i1)]
-                  [p2 (read-bytes (add1 *num-pieces*) i2)]
+        (let mrg ([p1 (read-bytes (add1 (get-*num-pieces*)) i1)]
+                  [p2 (read-bytes (add1 (get-*num-pieces*)) i2)]
                   [last-written last])
           (cond [(and (eof-object? p1) (eof-object? p2)) void]
-                [(eof-object? p1) (write-bs->file p2 (current-output-port) (add1 *num-pieces*))
-                                  (mrg p1 (read-bytes (add1 *num-pieces*) i2) p2)]
-                [(eof-object? p2) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                  (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
-                [(bytes=? (subbytes p1 1) (subbytes last-written 1)) (mrg (read-bytes (add1 *num-pieces*) i1) p2 last-written)]
-                [(bytes=? (subbytes p2 1) (subbytes last-written 1)) (mrg p1 (read-bytes (add1 *num-pieces*) i2) last-written)]
-                [(bytes<? (subbytes p1 1) (subbytes p2 1)) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                                           (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
+                [(eof-object? p1) (write-bs->file p2 (current-output-port) (add1 (get-*num-pieces*)))
+                                  (mrg p1 (read-bytes (add1 (get-*num-pieces*)) i2) p2)]
+                [(eof-object? p2) (write-bs->file p1 (current-output-port) (add1 (get-*num-pieces*)))
+                                  (mrg (read-bytes (add1 (get-*num-pieces*)) i1) p2 p1)]
+                [(bytes=? (subbytes p1 1) (subbytes last-written 1)) (mrg (read-bytes (add1 (get-*num-pieces*)) i1) p2 last-written)]
+                [(bytes=? (subbytes p2 1) (subbytes last-written 1)) (mrg p1 (read-bytes (add1 (get-*num-pieces*)) i2) last-written)]
+                [(bytes<? (subbytes p1 1) (subbytes p2 1)) (write-bs->file p1 (current-output-port) (add1 (get-*num-pieces*)))
+                                                           (mrg (read-bytes (add1 (get-*num-pieces*)) i1) p2 p1)]
                 [(and (bytes=? (subbytes p1 1) (subbytes p2 1))
-                      (< (bytes-ref p1 0) (bytes-ref p2 0))) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                                             (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
-                [else (write-bs->file p2 (current-output-port) (add1 *num-pieces*))
-                      (mrg p1 (read-bytes (add1 *num-pieces*) i2) p2)]
+                      (< (bytes-ref p1 0) (bytes-ref p2 0))) (write-bs->file p1 (current-output-port) (add1 (get-*num-pieces*)))
+                                                             (mrg (read-bytes (add1 (get-*num-pieces*)) i1) p2 p1)]
+                [else (write-bs->file p2 (current-output-port) (add1 (get-*num-pieces*)))
+                      (mrg p1 (read-bytes (add1 (get-*num-pieces*)) i2) p2)]
                 )))
       #:exists 'replace)
     (close-input-port i1)
@@ -176,7 +176,7 @@
   (printf "A*-file-search: best-f-depth=~a~%" best-f)
   (let ([iport (open-input-file file-name)]
         [num-read 0])
-    (for ([a*p (in-port (lambda (i) (read-bytes (add1 *num-pieces*) i)) iport)])
+    (for ([a*p (in-port (lambda (i) (read-bytes (add1 (get-*num-pieces*)) i)) iport)])
       (set! num-read (add1 num-read))
       (when (= (get-f-val a*p) best-f)
         (process-position a*p best-f)))
@@ -282,10 +282,10 @@
   (let* ([num-expanded (expand* (hc-position -1 p) 0)]
          ;[ignore (printf "finished expand* and got ~a successors~%" num-expanded)]
          [res (for/vector ([i num-expanded])
-                          (when (is-goal? (vector-ref *expansion-space* i))
-                            (printf "found goal: ~s~%" (hc-position-bs (vector-ref *expansion-space* i)))
-                            (set! *found-goal* (vector-ref *expansion-space* i)))
-                          (bytes-copy (hc-position-bs (vector-ref *expansion-space* i))))])
+                          (when (is-goal? (vector-ref (get-*expansion-space*) i))
+                            (printf "found goal: ~s~%" (hc-position-bs (vector-ref (get-*expansion-space*) i)))
+                            (set! *found-goal* (vector-ref (get-*expansion-space*) i)))
+                          (bytes-copy (hc-position-bs (vector-ref (get-*expansion-space*) i))))])
     ;(printf "finishing expand-a* after making the vector of raw positions from the expansion-space~%")
     res
     ))
@@ -361,10 +361,10 @@
 ;(climb12-init)
 ;(climb15-init)
 ;(climbpro24-init)
-(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
+(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" (get-*puzzle-name*)))
 
 (define heuristic
-  (case *puzzle-name*
+  (case (get-*puzzle-name*)
     [("block10v12") b10-heuristic]
     [("climb12") c12-heuristic+]))
 
@@ -377,14 +377,14 @@
   (hc-position-bs *start*))
 
 ;; initialization
-(set! *target-cell* (loc-to-cell (- (cdr *target*) *charify-offset*)))
+(set! *target-cell* (loc-to-cell (- (cdr (get-*target*)) *charify-offset*)))
 (set! open-set (set-add open-set (hc-position-bs *start*)))
 (vector-set! vools (fscore->voolindex (heuristic (hc-position-bs *start*)))
              (list (hc-position-bs *start*)))
 (add-scores! (hc-position-bs *start*) 0 (+ 0 (heuristic (hc-position-bs *start*))))
 (with-output-to-file "astarnodelist"
   (lambda () (write-bs->file (bytes-append (bytes (f-score (hc-position-bs *start*))) (hc-position-bs *start*))
-                             (current-output-port) (add1 *num-pieces*)))
+                             (current-output-port) (add1 (get-*num-pieces*))))
   #:exists 'replace)
 
 ;(time (a*-search 0))
