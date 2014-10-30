@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
-(require "stp-datatypes.rkt")
+(require racket/set 
+         "stp-datatypes.rkt")
 
 (provide (all-defined-out))
 
@@ -9,13 +10,13 @@
 
 ;;------------------------------------------------------------------------------------------------------
 ;; BLOCK-10 PUZZLE INIT (variant 12)
-(define: *block10-piece-types* : (Vectorof (Listof Any))
-   '#((reserved-spaces)               ; 0 reserved for spaces in actual position representation
-             ((0 . 0)(0 . 1)(1 . 0)(1 . 1))  ; 1  2x2
-             ((0 . 0)(0 . 1)(1 . 0))         ; 2  Upper Left pointing L
-             ((0 . 0)(1 . -1)(1 . 0))        ; 3  Lower Right pointing L
-             ((0 . 0)(1 . 0))                ; 4  2x1 vertical rectangle
-             ((0 . 0))))                     ; 5  1x1 unit square
+(define: *block10-piece-types* : (Vectorof (Setof CellRef))
+  (vector (ann (set) (Setof CellRef))     ; 0 reserved for spaces in actual position representation
+          (set '(0 . 0)'(0 . 1)'(1 . 0)'(1 . 1))  ; 1  2x2
+          (set '(0 . 0)'(0 . 1)'(1 . 0))         ; 2  Upper Left pointing L
+          (set '(0 . 0)'(1 . -1)'(1 . 0))        ; 3  Lower Right pointing L
+          (set '(0 . 0)'(1 . 0))                ; 4  2x1 vertical rectangle
+          (set '(0 . 0))))                     ; 5  1x1 unit square
 
 (define: *block10-start* : prepos ; variant 12
   (prepos (list (tspec 1 '(4 . 1))
@@ -37,14 +38,14 @@
 ;; CLIMB-12 PUZZLE INIT
 ;; piece-type is implicit in position within list, each pair specifies the cells of the piece
 ;; and their location relative to the (arbitrary) origin of that piece, (0 0).
-(define: *climb12-piece-types* : (Vectorof (Listof Any))
-  '#((reserved-spaces)
-     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
-     ((0 . 0)(0 . 1)(1 . 0))                   ; 2  Upper Left pointing L
-     ((0 . 0)(1 . -1)(1 . 0))                  ; 3  Lower Right pointing L
-     ((0 . 0)(1 . 0))                          ; 4  2x1 vertical rectangle
-     ((0 . 0)(0 . 1))                          ; 5  1x2 horizontal rectangle
-     ((0 . 0))))                               ; 6  1x1 unit square
+(define: *climb12-piece-types* : (Vectorof (Setof CellRef))
+  (vector (ann (set) (Setof CellRef))                                        ; 0 reserved for spaces
+          (set '(0 . 0)'(1 . -1)'(1 . 0)'(1 . 1))           ; 1  4 square T (stem up)
+          (set '(0 . 0)'(0 . 1)'(1 . 0))                   ; 2  Upper Left pointing L
+          (set '(0 . 0)'(1 . -1)'(1 . 0))                  ; 3  Lower Right pointing L
+          (set '(0 . 0)'(1 . 0))                          ; 4  2x1 vertical rectangle
+          (set '(0 . 0)'(0 . 1))                          ; 5  1x2 horizontal rectangle
+          (set '(0 . 0))))                               ; 6  1x1 unit square
 
 ;; specify board-state by triples: piece-type, board-row, board-col
 (define: *climb12-start* : prepos
@@ -65,12 +66,12 @@
 ;; specify target as triple: piece-type, board-row, board-col
 (define: *climb12-target* : TileSpec (cons 1 (cons 0 2)))
 (define *climb12-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
-
+#|
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-15 PUZZLE INIT
 ;; (variation 1: 104 moves)
-(define: *climb15-piece-types* : (Vectorof (Listof Any))
-  '#((reserved-spaces)
+(define: *climb15-piece-types* : (Vectorof (U Null (Listof CellRef)))
+  '#(()                                        ; 0 reserved for spaces
      ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
      ((0 . 0)(0 . 1)(1 . 0))                   ; 2  Upper Left pointing L
      ((0 . 0)(1 . -1)(1 . 0))                  ; 3  Lower Right pointing L
@@ -121,8 +122,8 @@
 (define: *climbpro24-target* : TileSpec (cons 1 (cons 0 3)))
 (define *climbpro24-invalid-cells* '((0 . 0)(0 . 1)(0 . 2)(0 . 4)(0 . 5)(0 . 6)))
 
-(define: *climbpro24-piece-types* : (Vectorof (Listof Any))
-  '#((reserved-spaces)
+(define: *climbpro24-piece-types* : (Vectorof (U Null (Listof CellRef)))
+  '#(()                                        ; 0 reserved for spaces
      ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
      ((0 . 0)(0 . 1)(1 . 0)(1 . 1))            ; 2  2x2 square
      ((0 . 0)(0 . 1)(1 . 0))                   ; 3  Upper Left pointing L
@@ -162,7 +163,7 @@
           '((0 . 3)(1 . 2)(1 . 3)(1 . 4))
           ))
 
-
+|#
 ;;------------------------------------------------------------------------------------------------------
 ; for local testing
 ;(block10-init)

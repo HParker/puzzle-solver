@@ -49,11 +49,11 @@
          ;rc-
          block10-init
          climb12-init
-         climb15-init
-         climbpro24-init
+         ;climb15-init
+         ;climbpro24-init
          )
 
-(define: (get-*piece-types*) : (Vectorof (Setof Any)) *piece-types*)
+(define: (get-*piece-types*) : (Vectorof (Setof CellRef)) *piece-types*)
 (define: (get-*num-pieces*) : Integer *num-pieces*)
 (define: (get-*bs-ptype-index*) : (Vectorof Byte) *bs-ptype-index*)
 (define: (get-*target*) : (Pairof Byte Byte) *target*)
@@ -81,7 +81,7 @@
 ;; puzzle specific parameters
 (define: *invalid-cells* : (Listof Cell) empty)
 (define: *num-piece-types* : Byte 0)
-(define: *piece-types* : (Vectorof (Setof Any)) (vector))
+(define: *piece-types* : (Vectorof (Setof CellRef)) (vector))
 (define: *num-pieces* : Byte 0)
 (define: *start* : hc-position (hc-position 0 #"uninitialized"))
 (define: *piece-type-template* : (Vectorof Byte) (vector)) ; for each piece-type index, stores how many blocks of that type there are
@@ -93,7 +93,7 @@
 (define: *bsz* : Byte 0)
 (define: *expansion-space* : (Vectorof hc-position) (vector))
 ;(define *bsbuffer* #"") ;; a reusable buffer for holding expansions of a given position
-(define: *cell-to-loc* : (Mutable-Array (U Byte False)) (mutable-array 0 : (U Byte False)))
+(define: *cell-to-loc* : (Array (U Byte False)) (array 0 : (U Byte False)))
 (define: *loc-to-cell* : (Vectorof Cell) (vector))
 (define: *piecelocvec* : (Vectorof Boolean) (make-vector 42 #f));; vector boolean representing used move locations where the index is the location to which a single piece was moved
 ;; a vector of mutable pairs holding piece-type and location
@@ -103,15 +103,16 @@
 
 ;; init-all!: piece-type-vector prepos target N N (listof (N . N)) string -> void
 ;; generic setter for use by puzzle-specific initialization functions
-(define: (init-all! [ptv : (Vectorof (Listof Any))] [s : prepos] [t : TileSpec] [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
+(define: (init-all! [ptv : (Vectorof (Setof CellRef))] [s : prepos] [t : TileSpec] [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
   (set! *bh* nrow)
   (set! *bw* ncol)
   (set! *bsz* (assert (- (* nrow ncol) (length invalid)) byte?))
   (init-cell-loc-maps! nrow ncol invalid)
   (set! *num-piece-types* (assert (vector-length ptv) byte?)) ;; must come before bw-positionify/(pre-compress)
   (set! *piecelocvec* (ann (make-vector *bsz* #f) (Vectorof Boolean)))
-  (set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof Any))));****
-  #|(set! *piece-types* (for/vector: : (Vectorof (Setof Any)) ([cell-specs : (Listof Any) ptv])
+  (set! *piece-types* ptv)
+  ;(set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof CellRef))));****
+  #|(set! *piece-types* (for/vector: : (Vectorof (Setof Any)) ([cell-specs : (Listof CellRef) ptv])
                         (list->set cell-specs)))|#
   (set! *invalid-cells* invalid)
   (set! *num-pieces* (assert (+ (length (prepos-tspecs s)) (length (prepos-spaces s))) byte?)) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
@@ -149,7 +150,7 @@
 ;; init-cell-loc-maps!: N N (listof (N . N)) -> void
 ;; called only at initialization: init the cell-to-loc and loc-to-cell arrays
 (define: (init-cell-loc-maps! [nrow : Byte] [ncol : Byte] [invalid : (Listof Cell)]) : Void
-  (set! *loc-to-cell* (for*/vector: : (Vectorof Cell) ([r nrow][c ncol] #:unless (member (cons r c) invalid))
+  (set! *loc-to-cell* (for*/vector: : (Vectorof Cell) ([r : Byte nrow][c : Byte ncol] #:unless (member (cons r c) invalid))
                         (cons r c)))
   (let ((invalid-skipped 0))
     (set! *cell-to-loc* (for/array: #:shape (vector nrow ncol) ([i (* *bh* *bw*)]) : (U Byte False)
@@ -168,7 +169,7 @@
 
 ;; slow version of loc-to-cell for use during population of *cell-to-loc*
 (define: (slow-loc-to-cell (i : Byte)) : Cell
-  (cons (assert (floor (/ i *bw*)) byte?)
+  (cons (assert (quotient i *bw*) byte?)
         (remainder i *bw*)))
 
 ;; loc-to-cell: int -> cell
@@ -178,21 +179,21 @@
 
 ;;--------------------------------------------------------------------------------
 
-;; charify: bw-position -> bytearray
+;; charify: bw-position -> bytestring
 ;; convert a bitwise represented position into a series of bytes
 (define: (charify [bw-p : (Vectorof Integer)]) : Bytes
   (for/fold: : Bytes ([res : Bytes #""])
     ([pt (in-vector bw-p)])
     (bytes-append res (charify-int pt))))
 
-;; charify-int: int -> bytearray
-;; convert a single int to a bytearray rep of each 1 appearing in the int's binary representation
-;; that is, the resulting bytearray will be as long as the number of 1's in the given int
+;; charify-int: int -> bytestring
+;; convert a single int to a bytestring rep of each 1 appearing in the int's binary representation
+;; that is, the resulting bytestring will be as long as the number of 1's in the given int
 (define: (charify-int [i : Integer]) : Bytes
   (for/fold: : Bytes ([res #""])
     ([b (integer-length i)]
      #:when (bitwise-bit-set? i b))
-    (bytes-append res (bytes (+ b *charify-offset*)))))
+    (bytes-append res (bytes (assert (+ b *charify-offset*) byte?)))))
 
 ;; intify: bytestring [int] [int] -> int
 ;; convert a given series of bytes to a bitwise overlay of their corresponding positions
@@ -264,15 +265,15 @@
 
 (define (climb12-init)
   (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells*))
-
+#|
 (define (climb15-init)
   (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells*))
 
 (define (climbpro24-init)
   (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells*))
-
+|#
 (case *puzzle-name*
   (("climb12") (climb12-init))
-  (("climb15") (climb15-init))
-  (("climbpro24") (climbpro24-init))
+  ;(("climb15") (climb15-init))
+  ;(("climbpro24") (climbpro24-init))
   (else (error 'stp-init "puzzle-name missing or unknown in stpconfigs/configenv.rkt")))

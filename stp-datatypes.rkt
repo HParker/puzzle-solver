@@ -5,8 +5,11 @@
 ;; ******************************************************************************
 ;; DATA DEFINITIONS
 
-;; a cell is a pair, (list r c), for row and column r and c
+;; a cell is a pair, (cons r c), for row and column r and c
 (define-type Cell (Pairof Byte Byte))
+
+;; a cell-ref is a pair (cons v h) for vert. and horiz. references -- possibly negative
+(define-type CellRef (Pairof Fixnum Fixnum))
 
 ;; a location (loc for short) is an int, representing the row-major rank of a cell
 (define-type-alias Loc Byte)
@@ -43,4 +46,12 @@
 ;; wrapper for the position rep augmented with the hashcode
 (define: (make-hcpos [bsrep : Bytes]) : hc-position (hc-position (assert (equal-hash-code bsrep) fixnum?) bsrep))
 
+
+;; a better-move-schema (BMS) is a (list int int byte byte)
+;; where the four numbers are
+;; 1. bit-representation of space prerequisites (where they need to be)
+;; 2. xor of space preconditions and space postconditions ("changed-blanks": all that change)
+;; 3. ***?*** "xor of current location and translated location (origin) of the piece" but appears to be list->bwrep or the OR of the current and translated locations
+;; 4. new location of the moved tile's origin
+(define-type-alias BMS (List Integer Integer Integer Byte))
 
