@@ -1,4 +1,4 @@
-#lang racket/base
+#lang typed/racket/base
 
 (require
  srfi/25 ;; multi-dimensional arrays
@@ -7,6 +7,7 @@
  racket/vector
  ;racket/generator
  "stpconfigs/configenv.rkt"
+ "stp-datatypes.rkt"
  "stp-init.rkt"
  )
                   
@@ -23,14 +24,14 @@
 (provide (all-defined-out))
 
 ;; hcposition<?: hc-position hc-position -> boolean
-(define (hcposition<? p1 p2)
+(define: (hcposition<? (p1 : hc-position) (p2 : hc-position)) : Boolean
   (or (< (hc-position-hc p1) (hc-position-hc p2))
       (and (= (hc-position-hc p1) (hc-position-hc p2))
            (bytes<? (hc-position-bs p1) (hc-position-bs p2)))))
 
 ;; blexi<?: hc-position hc-position -> boolean
 ;; lexicographic fallback for hash collision
-(define (blexi<? p1 p2)
+(define: (blexi<? (p1 : hc-position) (p2 : hc-position)) : Boolean
   (bytes<? (hc-position-bs p1) (hc-position-bs p2)))
 
 
@@ -41,7 +42,7 @@
 
 ;; list-subtract: (listof X) (listof X) (X X -> boolean) -> (listof X)
 ;; ASSUME lists are sorted
-(define (list-subtract l1 l2 comp?)
+(define: (list-subtract (l1 : (Listof Any)) (l2 : (Listof Any)) (comp? : ( Any Any -> Boolean ))) : (Listof Any)
   (cond [(or (empty? l1) (empty? l2)) l1]
         [(equal? (first l1) (first l2)) (list-subtract (rest l1) l2 comp?)]
         [(comp? (first l1) (first l2)) (cons (first l1) (list-subtract (rest l1) l2 comp?))]
@@ -60,7 +61,7 @@
 
 ;; compile-ms-array!: (vectorof (setof cell)) int int -> void
 ;; where the vector is the piece-type specification, *piece-types*, and the ints are the width and height
-(define (compile-ms-array! piece-type-specs bh bw)
+(define: (compile-ms-array! (piece-type-specs : (Vectorof (Setof Cell))) (bh : Byte) (bw : Byte)) : Void
   (when (or (zero? bh) (zero? bw)) (error 'compile-ms-array "must be called after an appropriate initialization call"))
   (let ((a (make-array (shape 1 (vector-length piece-type-specs) 0 (get-*bsz*) 0 4))))
     (for ([piece-type-spec (in-vector (vector-drop piece-type-specs 1))]
@@ -79,27 +80,27 @@
     (set! *ms-array* a)))
 
 ;; translate-loc: loc trans-spec -> loc
-(define (translate-loc l trans)
+(define: (translate-loc (l : Loc) (trans : Cell)) : Loc
   (cell-to-loc (translate-cell (loc-to-cell l) trans)))
 
 ;; translate-cell: cell trans-spec -> cell
 ;; given a trans-spec as (delta-row . delta-col) pair, return a new pair
-(define (translate-cell c trans) 
+(define: (translate-cell (c : Cell) (trans : Cell)) : Cell
   (cons (+ (car c) (car trans)) (+ (cdr c) (cdr trans))))
 
 ;; translate-piece: (listof cells) trans-spec -> (listof cells)
-(define (translate-piece cell-list trans)
+(define: (translate-piece (cell-list : (Listof Cell)) (trans : Cell)) : (Listof Cell)
   (for/list ([cell cell-list])
     (translate-cell cell trans)))
 
 
-;; better-move-schema: cell trans-spec (listof cell) (listof cell) -> (list int int int)
+;; better-move-schema: cell trans-spec (listof cell) (listof cell) -> (list int int int int)
 ;; a better-move-schema (better-ms) is a list:
 ;; first:   bit-rep of space preconditions
 ;; second:  xor of space preconditions and space postconditions ("changed-blanks": all that change)
 ;; third:   xor of current location and translated location (origin) of the piece
 ;; fourth:  new location of the moved tile's origin
-(define (better-move-schema cell trans start-cell-list moved-cell-list)
+(define: (better-move-schema (cell : Cell) (trans : Cell) (start-cell-list : (Listof Cell)) (moved-cell-list : (Listof Cell))) : (List Integer Integer Integer Integer)
   (let* ([current-loc-list (sort (map cell-to-loc start-cell-list) <)]
          [loc-list-to (sort (map cell-to-loc moved-cell-list) <)])
     (list (list->bwrep (list-subtract loc-list-to  current-loc-list <))
@@ -111,13 +112,14 @@
 
 ;; position-in-vec?: (vectorof position) position -> boolean
 ;; determine if given position is in vector of positions
-(define (position-in-vec? v p)
+(define: (position-in-vec? (v : (Vectorof hc-position)) (p : hc-position)) : Boolean
   (vec-member? v p hcposition<?))
 
 ;; find-pos-index: fixnum (vectorof position) -> int
 ;; find the index of the *FIRST* position (if present) or of the first position greater than where it would be
 ;; *** THIS IS NOT _EXACTLY_ CORRECT: assumes only used to pick responsibility-ranges
-(define (find-pos-index pos-hashcode vop (low 0) (high (vector-length vop)))
+***
+(define: (find-pos-index (pos-hashcode : Fixnum) (vop : (Vectorof hc-position)) (low 0) (high (vector-length vop))) : Integer
   (error "find-pos-index: cannot process hc-positions")
   (let* ([mid (floor (/ (+ low high) 2))]
          [mid-hashcode (and (< mid (vector-length vop)) (equal-hash-code (vector-ref vop mid)))])
