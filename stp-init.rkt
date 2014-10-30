@@ -41,6 +41,7 @@
          ;bwrep->list
          cell-to-loc
          loc-to-cell
+         invalid-cell?
          ;register-loc-to-pair
          ;locs->rcbyte
          ;rcpair->rcbyte
@@ -164,7 +165,8 @@
 (define: (cell-to-loc [pair : Cell]) : Loc
   (let: ([maybe-loc : (U Byte False) (array-ref *cell-to-loc* (vector (car pair) (cdr pair)))])
     (if (boolean? maybe-loc)
-        (error 'cell-to-loc "attempt to access loc for invalid cell")
+        (begin (printf "given cell: ~a~%and maybe-loc: ~a~%" pair maybe-loc)
+               (error 'cell-to-loc "attempt to access loc for invalid cell"))
         maybe-loc)))
 
 ;; slow version of loc-to-cell for use during population of *cell-to-loc*
@@ -175,6 +177,9 @@
 ;; loc-to-cell: int -> cell
 (define: (loc-to-cell [i : Loc]) : Cell
   (vector-ref *loc-to-cell* i))
+
+(define: (invalid-cell? [c : CellRef]) : Boolean
+  (cons? (member c *invalid-cells*)))
 
 
 ;;--------------------------------------------------------------------------------

@@ -185,7 +185,9 @@
 (define: (onboard? [c : CellRef]) : Boolean
   (and (< -1 (car c) *bh*)
        (< -1 (cdr c) *bw*)
-       (number? (cell-to-loc (cast c Cell)))))
+       (not (invalid-cell? c))
+       ;(number? (cell-to-loc (cast c Cell)))
+       ))
 ;; loc-onboard?: loc -> boolean
 (define: (loc-onboard? [loc : Loc]) : Boolean
   (< -1 loc *bsz*))
