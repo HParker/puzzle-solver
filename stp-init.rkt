@@ -27,7 +27,7 @@
          *bw* get-*bw*
          *bh* get-*bh*
          *bsz* get-*bsz*
-         *expansion-space* get-*expansion-space*
+         ;*expansion-space* get-*expansion-space*
          *start* get-*start*
          *piece-type-template* get-*piece-type-template*
          *num-spaces* get-*num-spaces*
@@ -61,7 +61,7 @@
 (define: (get-*bw*) : Byte *bw*)
 (define: (get-*bh*) : Byte *bh*)
 (define: (get-*bsz*) : Byte *bsz*)
-(define: (get-*expansion-space*) : (Vectorof hc-position) *expansion-space*)
+;(define: (get-*expansion-space*) : (Vectorof hc-position) *expansion-space*)
 (define: (get-*start*) : hc-position  *start*)
 (define: (get-*piece-type-template*) : (Vectorof Byte) *piece-type-template*)
 (define: (get-*num-spaces*) : Byte *num-spaces*)
@@ -92,7 +92,7 @@
 (define: *bw* : Byte 0)
 (define: *bh* : Byte 0)
 (define: *bsz* : Byte 0)
-(define: *expansion-space* : (Vectorof hc-position) (vector))
+;(define: *expansion-space* : (Vectorof hc-position) (vector))
 ;(define *bsbuffer* #"") ;; a reusable buffer for holding expansions of a given position
 (define: *cell-to-loc* : (Array (U Byte False)) (array 0 : (U Byte False)))
 (define: *loc-to-cell* : (Vectorof Cell) (vector))
@@ -109,7 +109,7 @@
   (set! *bw* ncol)
   (set! *bsz* (assert (- (* nrow ncol) (length invalid)) byte?))
   (init-cell-loc-maps! nrow ncol invalid)
-  (set! *num-piece-types* (assert (vector-length ptv) byte?)) ;; must come before bw-positionify/(pre-compress)
+  (set! *num-piece-types* (assert (vector-length ptv) byte?)) ;; including spaces -- must come before bw-positionify/(pre-compress)
   (set! *piecelocvec* (ann (make-vector *bsz* #f) (Vectorof Boolean)))
   (set! *piece-types* ptv)
   ;(set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof CellRef))));****
@@ -122,7 +122,7 @@
                                 ([pt : (Listof Loc) (old-positionify (bw-positionify (pre-compress s)))])
                                 (assert (length pt) byte?)))
   (set! *num-spaces* (vector-ref *piece-type-template* 0))
-  (set! *expansion-space* (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*))))) ;(Vectorof hc-position)))
+  ;;(set! *expansion-space* (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*))))) ;(Vectorof hc-position)))
   #|
   (set! *expandbuf* (cast (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*)
                                         (lambda (_) (cast (mcons 0 (make-bytes *num-pieces*)) (MPairof Byte Bytes)))) 
