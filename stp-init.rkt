@@ -5,12 +5,13 @@
          racket/set
          )
 
+(require "stpconfigs/configenv.rkt")
+
 (provide EXPAND-SPACE-SIZE
          (struct-out hc-position)
          make-hcpos
          *prim-move-translations* 
          *charify-offset*
-         *puzzle-name*
          *piece-types*
          *num-pieces*
          *bs-ptype-index*
@@ -77,7 +78,7 @@
 
 ;; INITIALIZE STUFF FOR SLIDING-TILE-SOLVER
 
-(define EXPAND-SPACE-SIZE 500000)
+(define EXPAND-SPACE-SIZE 1000000)
 ;(define EXPAND-SPACE-SIZE 2000000)
 
 ;; move trans for up, right, down and left respectively
@@ -86,7 +87,6 @@
 (define *max-board-size* 64)
 
 ;; puzzle specific parameters
-(define *puzzle-name* "a string identifying the puzzle for selecting possible configuration files")
 (define *invalid-cells* empty)
 (define *num-piece-types* 0)
 (define *piece-types* (vector))
@@ -105,17 +105,16 @@
 (define *loc-to-cell* "1d vector of loc indexing to row-col cell-pairs")
 
 
-;; init-all!: piece-type-vector pre-position-list target N N (listof (N . N)) string -> void
+;; init-all!: piece-type-vector pre-position-list target N N (listof (N . N)) -> void
 ;; generic setter for use by puzzle-specific initialization functions
-(define (init-all! ptv s t nrow ncol invalid pzlname)
+(define (init-all! ptv s t nrow ncol invalid)
   (init-cell-loc-maps! nrow ncol invalid)
-  (set! *puzzle-name* pzlname)
   (set! *bh* nrow)
   (set! *bw* ncol)
   (set! *bsz* (- (* nrow ncol) (length invalid)))
   (set! *num-piece-types* (vector-length ptv)) ;; must come before bw-positionify/(pre-compress)
   (set! *piece-types* (for/vector ([cell-specs ptv])
-                                  (list->set cell-specs)));****
+                        (list->set cell-specs)));****
   (set! *invalid-cells* invalid)
   (set! *num-pieces* (+ (length s) -1 (length (last s)))) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
   (set! *start* (make-hcpos (charify (bw-positionify (pre-compress s)))))
@@ -283,7 +282,7 @@
 (define *block10-invalid-cells* '((0 . 0) (0 . 3)))
 
 (define (block10-init)
-  (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells* *block10-name*))
+  (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells*))
 
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-12 PUZZLE INIT
@@ -320,7 +319,7 @@
 (define *climb12-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
 
 (define (climb12-init)
-  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells* *climb12-name*))
+  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells*))
 
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-15 PUZZLE INIT
@@ -360,7 +359,7 @@
 (define *climb15-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
 
 (define (climb15-init)
-  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells* *climb15-name*))
+  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells*))
 
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-24-PRO PUZZLE INIT
@@ -423,11 +422,14 @@
     ))
 
 (define (climbpro24-init)
-  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells* *climbpro24-name*))
+  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells*))
 
 
 ;;------------------------------------------------------------------------------------------------------
-;(block10-init) ; for local testing
-(climb12-init)
-;(climb15-init)
-;(climbpro24-init)
+;; using the config in stpconfigs/configenv.rkt
+
+(case *puzzle-name*
+  (("climb12") (climb12-init))
+  (("climb15") (climb15-init))
+  (("climbpro24") (climbpro24-init))
+  (else (error 'stp-init.rkt "puzzle-name missing or unknown in stpconfigs/configenv.rkt")))

@@ -13,8 +13,8 @@
 (require racket/fixnum)
 (require racket/set)
 
-(require "stpconfigs/configenv.rkt")
-(require "stp-init.rkt"
+(require "stpconfigs/configenv.rkt"
+         "stp-init.rkt"
          "stp-solve-base.rkt"
          "stp-fringefilerep.rkt"
          "stp-spaceindex.rkt"

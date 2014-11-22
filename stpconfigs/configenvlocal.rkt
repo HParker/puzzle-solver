@@ -21,3 +21,4 @@ Create a link named "configenv.rkt" to this file if on local machine
 (define *share-store* "fringefiles/")
 (define *n-processors* 4)
 (define *late-duplicate-removal* #f)
+(define *puzzle-name* "climb12") ;; one of climb12, climb15, climbpro24

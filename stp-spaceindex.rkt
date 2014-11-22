@@ -7,6 +7,7 @@
  racket/set
  ;test-engine/racket-tests
  ;racket/generator
+ "stpconfigs/configenv.rkt"
  "stp-init.rkt"
  "stp-solve-base.rkt"
  )

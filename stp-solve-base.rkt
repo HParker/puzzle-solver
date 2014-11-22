@@ -4,8 +4,10 @@
  srfi/25 ;; multi-dimensional arrays
  racket/list
  racket/vector
+ racket/set
  ;test-engine/racket-tests
  ;racket/generator
+ "stpconfigs/configenv.rkt"
  "stp-init.rkt"
  )
                   
@@ -92,8 +94,8 @@
   (cons (+ (car c) (car trans)) (+ (cdr c) (cdr trans))))
 
 ;; translate-piece: (listof cells) trans-spec -> (listof cells)
-(define (translate-piece cell-list trans)
-  (for/list ([cell (in-list cell-list)])
+(define (translate-piece cell-set trans)
+  (for/list ([cell (in-set cell-set)])
     (translate-cell cell trans)))
 
 
