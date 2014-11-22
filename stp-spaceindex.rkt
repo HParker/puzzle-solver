@@ -46,6 +46,59 @@
 
 
 ;;---- UTILITIES ----------------------------------------------------------
+#|
+(define *rcpair-to-rcbyte*
+  (make-array (shape 0 *bh* (- *bw*) (add1 *bw*))))
+(define *rcbyte-to-rcpair* (vector))
+(define (compile-transitions)
+  (for* ([r (in-range 0 *bh*)]
+         [c (in-range (- *bw*) (add1 *bw*))])
+    (array-set! *rcpair-to-rcbyte* r c (slow-rcpair->rcbyte (cons r c))))
+  (set! *rcbyte-to-rcpair*
+        (build-vector *bsz* (lambda (loc-byte) (slow-rcbyte->rcpair (+ loc-byte *charify-offset*))))))
+|#
+;; rcpair->rcbyte: (N . N) -> byte
+;; convert a row-col pair where the row value in range [0,*bh*) and col in range [-*bw*,+*bw*] into a rcbyte
+(define (rcpair->rcbyte rcp)
+  (when (or (< (car rcp) -2) (< (cdr rcp) (- *bw*)))
+    (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
+  (+ (bitwise-ior (arithmetic-shift (+ (car rcp) 2) 4) ;; the two is for the negative rows, the 4 is the high-four bits
+                  (+ *bw* (cdr rcp)))
+     *charify-offset*))
+#|
+(define (fast-rcpair->rcbyte rcp)
+  (array-ref *rcpair-to-rcbyte* (car rcp) (cdr rcp)))
+|#
+;; rcbyte->rcpair: byte -> (N . N)
+;; recover the row-col pair from the byte
+(define (rcbyte->rcpair b)
+  (let ([decharified-b (- b *charify-offset*)])
+    (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
+          (- (bitwise-and decharified-b 15) *bw*))))
+#|
+(define (fast-rcbyte->rcpair b)
+  (vector-ref *rcbyte-to-rcpair* (- b *charify-offset*)))
+
+(compile-transitions)
+|#
+          
+;; register-loc-to-pair: N (N . N) -> (N . N)
+;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
+(define (register-loc-to-pair loc ref)
+  (register-cell-to-pair (loc-to-cell loc) ref))
+
+;; register-cell-to-pair: (N . N) (N . N) -> (N . N)
+;; given actual cell and reference for blank-config, convert cell to canonical row-col pair
+(define (register-cell-to-pair cell ref)
+  (rc- cell ref))
+
+(define (deregister-pair-to-cell ref pair)
+  (register-cell-to-pair ref pair))
+
+;; rc+/-: (N . N) (N . N) -> (N . N)
+;; add or subtract the given cons pairs
+(define (rc+ p1 p2) (cons (+ (car p1) (car p2)) (+ (cdr p1) (cdr p2))))
+(define (rc- p1 p2) (cons (- (car p1) (car p2)) (- (cdr p1) (cdr p2))))
 
 ;; canonize: N N N N -> byte-string
 ;; convert the four blank locations into a canonical (3-byte) blank-configuration
@@ -74,40 +127,6 @@
          [drow (- (car c2) (car c1))]
          [dcol (- (cdr c2) (cdr c1))])
     (rcpair->rcbyte (cons drow dcol))))
-
-;; rcpair->rcbyte: (N . N) -> byte
-;; convert a row-col pair where the row value in range [0,*bh*) and col in range [-*bw*,+*bw*] into a rcbyte
-(define (rcpair->rcbyte rcp)
-  (when (or (< (car rcp) -2) (< (cdr rcp) (- *bw*)))
-    (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
-  (+ (bitwise-ior (arithmetic-shift (+ (car rcp) 2) 4) ;; the two is for the negative rows, the 4 is the high-four bits
-                  (+ *bw* (cdr rcp)))
-     *charify-offset*))
-
-;; rcbyte->rcpair: byte -> (N . N)
-;; recover the row-col pair from the byte
-(define (rcbyte->rcpair b)
-  (let ([decharified-b (- b *charify-offset*)])
-    (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
-          (- (bitwise-and decharified-b 15) *bw*))))
-          
-;; register-loc-to-pair: N (N . N) -> (N . N)
-;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
-(define (register-loc-to-pair loc ref)
-  (register-cell-to-pair (loc-to-cell loc) ref))
-
-;; register-cell-to-pair: (N . N) (N . N) -> (N . N)
-;; given actual cell and reference for blank-config, convert cell to canonical row-col pair
-(define (register-cell-to-pair cell ref)
-  (rc- cell ref))
-
-(define (deregister-pair-to-cell ref pair)
-  (register-cell-to-pair ref pair))
-
-;; rc+/-: (N . N) (N . N) -> (N . N)
-;; add or subtract the given cons pairs
-(define (rc+ p1 p2) (cons (+ (car p1) (car p2)) (+ (cdr p1) (cdr p2))))
-(define (rc- p1 p2) (cons (- (car p1) (car p2)) (- (cdr p1) (cdr p2))))
 
 ;;-------------------------------------------------------------------------
 
