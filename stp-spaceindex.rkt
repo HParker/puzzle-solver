@@ -46,41 +46,41 @@
 
 
 ;;---- UTILITIES ----------------------------------------------------------
-#|
+
 (define *rcpair-to-rcbyte*
-  (make-array (shape 0 *bh* (- *bw*) (add1 *bw*))))
+  (make-array (shape -2 (+ *bh* 3) (- *bw*) (add1 *bw*))))
 (define *rcbyte-to-rcpair* (vector))
 (define (compile-transitions)
-  (for* ([r (in-range 0 *bh*)]
+  (for* ([r (in-range -2 (+ *bh* 3))]
          [c (in-range (- *bw*) (add1 *bw*))])
     (array-set! *rcpair-to-rcbyte* r c (slow-rcpair->rcbyte (cons r c))))
   (set! *rcbyte-to-rcpair*
-        (build-vector *bsz* (lambda (loc-byte) (slow-rcbyte->rcpair (+ loc-byte *charify-offset*))))))
-|#
+        (build-vector (* (+ (- *bh* -2) 3) (add1 (* 2 *bw*))) (lambda (loc-byte) (slow-rcbyte->rcpair (+ loc-byte *charify-offset*))))))
+
 ;; rcpair->rcbyte: (N . N) -> byte
-;; convert a row-col pair where the row value in range [0,*bh*) and col in range [-*bw*,+*bw*] into a rcbyte
-(define (rcpair->rcbyte rcp)
+;; convert a row-col pair where the row value in range [-2,*bh*+2] and col in range [-*bw*,+*bw*] into a rcbyte
+(define (slow-rcpair->rcbyte rcp)
   (when (or (< (car rcp) -2) (< (cdr rcp) (- *bw*)))
     (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
   (+ (bitwise-ior (arithmetic-shift (+ (car rcp) 2) 4) ;; the two is for the negative rows, the 4 is the high-four bits
                   (+ *bw* (cdr rcp)))
      *charify-offset*))
-#|
-(define (fast-rcpair->rcbyte rcp)
+
+(define (rcpair->rcbyte rcp)
   (array-ref *rcpair-to-rcbyte* (car rcp) (cdr rcp)))
-|#
+
 ;; rcbyte->rcpair: byte -> (N . N)
 ;; recover the row-col pair from the byte
-(define (rcbyte->rcpair b)
+(define (slow-rcbyte->rcpair b)
   (let ([decharified-b (- b *charify-offset*)])
     (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
           (- (bitwise-and decharified-b 15) *bw*))))
-#|
-(define (fast-rcbyte->rcpair b)
+
+(define (rcbyte->rcpair b)
   (vector-ref *rcbyte-to-rcpair* (- b *charify-offset*)))
 
 (compile-transitions)
-|#
+
           
 ;; register-loc-to-pair: N (N . N) -> (N . N)
 ;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
