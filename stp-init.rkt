@@ -6,29 +6,33 @@
          )
 
 (provide EXPAND-SPACE-SIZE
-         hc-position hc-position-hc hc-position-bs hc-position? set-hc-position-hc!
+         (struct-out hc-position)
          make-hcpos
-         *prim-move-translations* *charify-offset* *max-board-size*
+         *prim-move-translations* 
+         *charify-offset*
          *puzzle-name*
-         *invalid-cells*
-         *num-piece-types* *piece-types* *num-pieces*
+         *piece-types*
+         *num-pieces*
          *bs-ptype-index*
-         *target* *bw* *bh* *bsz*
-         ;*expandpos*
-         *expandbuf*
+         *target*
+         *bw*
+         *bh*
+         *bsz*
          *expansion-space*
-         *piecelocvec* 
          *start*
          *piece-type-template*
          *num-spaces*
-         charify charify-int decharify intify
+         ;charify 
+         charify-int 
+         ;decharify
+         intify
          ;old-positionify ;** temp for testing
          list->bwrep ;; used only during initialization in compile-ms-array! via better-move-schema
          bwrep-direct
          bwrep->list
          ;bwrep->list
-         cell-to-loc *cell-to-loc*
-         loc-to-cell *loc-to-cell*
+         cell-to-loc
+         loc-to-cell
          block10-init
          climb12-init
          climb15-init
@@ -95,10 +99,7 @@
 (define *bw* 0)
 (define *bh* 0)
 (define *bsz* 0)
-;(define *expandpos* (vector))  ;; a (vectorof position) contains locations to index into *piecelocvec*
-(define *expandbuf* (vector)) ;; a vector of mutable pairs holding piece-type and location
 (define *expansion-space* (vector))
-(define *piecelocvec* (vector));; vector boolean representing used move locations where the index is the location to which a single piece was moved
 ;(define *bsbuffer* #"") ;; a reusable buffer for holding expansions of a given position
 (define *cell-to-loc* "2d array of row-col indexing to locations skipping invalid squares")
 (define *loc-to-cell* "1d vector of loc indexing to row-col cell-pairs")
@@ -121,9 +122,7 @@
   (set! *piece-type-template* (for/vector ([pt (old-positionify (bw-positionify (pre-compress s)))]) (length pt)))
   (set! *num-spaces* (vector-ref *piece-type-template* 0))
   ;(set! *expandpos* (make-vector (vector-ref *piece-type-template* 0) #f)) ;; any single piece can never generate more than the number of spaces
-  (set! *expandbuf* (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*) (lambda (_) (mcons 0 (make-bytes *num-pieces*)))))
   (set! *expansion-space* (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*)))))
-  (set! *piecelocvec* (make-vector *bsz* #f))
   ;(set! *bsbuffer* (make-bytes (* 4 *num-pieces*) 0))
   (set! *bs-ptype-index* (for/vector #:length *num-pieces* 
                            ([i *num-pieces*])
