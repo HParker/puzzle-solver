@@ -48,14 +48,14 @@
 ;;---- UTILITIES ----------------------------------------------------------
 
 (define *rcpair-to-rcbyte*
-  (make-array (shape -2 (+ *bh* 3) (- *bw*) (add1 *bw*))))
+  (make-array (shape -2 (+ *bh* 4) (- *bw*) (add1 *bw*))))
 (define *rcbyte-to-rcpair* (vector))
 (define (compile-transitions)
-  (for* ([r (in-range -2 (+ *bh* 3))]
+  (for* ([r (in-range -2 (+ *bh* 4))]
          [c (in-range (- *bw*) (add1 *bw*))])
     (array-set! *rcpair-to-rcbyte* r c (slow-rcpair->rcbyte (cons r c))))
   (set! *rcbyte-to-rcpair*
-        (build-vector (* (+ (- *bh* -2) 3) (add1 (* 2 *bw*))) (lambda (loc-byte) (slow-rcbyte->rcpair (+ loc-byte *charify-offset*))))))
+        (build-vector (* (+ *bh* 2 4) (add1 (* 2 *bw*))) (lambda (loc-byte) (slow-rcbyte->rcpair (+ loc-byte *charify-offset*))))))
 
 ;; rcpair->rcbyte: (N . N) -> byte
 ;; convert a row-col pair where the row value in range [-2,*bh*+2] and col in range [-*bw*,+*bw*] into a rcbyte
