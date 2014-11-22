@@ -288,10 +288,6 @@
     expanded-ptr))
 
 
-
-;(block10-init)   ;  160010 possible even-better-move-schema
-;(climb12-init)
-;(climb15-init)   ; 
 ;(climbpro24-init)
 ;(time (compile-ms-array! *piece-types* *bh* *bw*))
 ;(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*)))

@@ -546,7 +546,7 @@
       (distributed-expand-fringe prev-fringe current-fringe depth)))
 
 
-(define *max-depth* 10)(set! *max-depth* 255)
+(define *max-depth* 10)(set! *max-depth* 60)
 
 ;; cfs-file: fringe fringe int -> position
 ;; perform a file-based cluster-fringe-search at given depth
@@ -580,10 +580,6 @@
               (make-fringe *share-store* (list (make-filespec "fringe-d0" 1 (file-size d0) *share-store*)) 1)
               1)))
 
-;(block10-init)
-(climb12-init)
-;(climb15-init)
-;(climbpro24-init)
 ;(compile-ms-array! *piece-types* *bh* *bw*)
 (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
 
