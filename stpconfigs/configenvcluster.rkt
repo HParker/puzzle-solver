@@ -16,9 +16,13 @@ Create a link named "configenv.rkt" to this file if on cluster
 
 |#
 
-(define *master-name* "wcp")
+(define *master-name* "wcpkneel")
 (define *local-store* "/state/partition1/fringefiles/")
-(define *share-store* "/share/data2/fringefiles/")
-(define *n-processors* 34)
-(define *late-duplicate-removal* #f)
+;(define *local-store* "fringefiles/")
+;(define *local-store* "/space/bigspace/fringefiles/")
+(define *share-store* "/share/bigspace/fringefiles/")
+;(define *share-store* "/space/bigspace/fringefiles/")
+;(define *share-store* "fringefiles/")
+(define *n-processors* 18)
+(define *late-duplicate-removal* #t)
 

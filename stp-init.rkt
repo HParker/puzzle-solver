@@ -77,8 +77,8 @@
 
 ;; INITIALIZE STUFF FOR SLIDING-TILE-SOLVER
 
-(define EXPAND-SPACE-SIZE 500000)
-;(define EXPAND-SPACE-SIZE 2000000)
+;(define EXPAND-SPACE-SIZE 500000)
+(define EXPAND-SPACE-SIZE 1000000)
 
 ;; move trans for up, right, down and left respectively
 (define *prim-move-translations* '((-1 . 0) (0 . 1) (1 . 0) (0 . -1)))
@@ -428,6 +428,6 @@
 
 ;;------------------------------------------------------------------------------------------------------
 ;(block10-init) ; for local testing
-(climb12-init)
-;(climb15-init)
+;(climb12-init)
+(climb15-init)
 ;(climbpro24-init)
