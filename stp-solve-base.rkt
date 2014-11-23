@@ -11,17 +11,20 @@
  "stp-init.rkt"
  )
                   
-#|
+;#|
 (provide hcposition<?
          blexi<?
-         *ms-array*
+         list-subtract
+         lookup-movespec
          compile-ms-array!
+         translate-cell
          position-in-vec?
-         expand
          is-goal?
+         bw-valid-move?
+         onboard?
          seconds->time)
-|#
-(provide (all-defined-out))
+;|#
+;(provide (all-defined-out))
 
 #| merge-conflict
 ;; a vector of mutable pairs holding piece-type and location
@@ -66,7 +69,10 @@
 ;; move-schema-array for compiling move requirements
 ;(define: *ms-array* : (Array (U BMS False)) (array #[#f] : (U BMS False)))
 (define *ms-array*  (array #[#f] : (U BMS False)))
-;(define *ms-array* (array #[#f]))
+
+(define: (lookup-movespec [piece-type : Byte] [loc : Loc] [move-dir : Byte]) : (U BMS False)
+  (array-ref *ms-array* ((inst vector Index) (assert (sub1 piece-type) byte?) loc move-dir)))
+
 
 ;; compile-ms-array!: (vectorof (setof cell)) int int -> void
 ;; where the vector is the piece-type specification, *piece-types*, and the ints are the width and height
@@ -90,16 +96,18 @@
                             #f))))))
     (set! *ms-array* a)))
 |#
+;; NOTE: the compiled move-spec array, *ms-array* indexes piece-types at (sub1 piece-type).  This is important for looking up move-specs
 (define: (compile-ms-array! [piece-type-specs : (Vectorof (Setof CellRef))] [bh : Byte] [bw : Byte]) : Void
   (when (or (zero? bh) (zero? bw)) (error 'compile-ms-array "must be called after an appropriate initialization call"))
-  (let*: ((bsz : Byte *bsz*)
-          (ds ((inst vector Index) (assert (sub1 (vector-length piece-type-specs)) byte?)
+  (let*: ((pts (vector-drop piece-type-specs 1)) ;; drop the spaces for purposes of compiling move-specs
+          (bsz : Byte *bsz*)
+          (ds ((inst vector Index) (assert (vector-length pts) byte?)
                                    (assert bsz byte?) 4))
-          (a (for*/array: #:shape ds ([pt (in-range (sub1 (vector-length piece-type-specs)))]
+          (a (for*/array: #:shape ds ([pt (in-range (vector-length pts))]
                                       [loc (in-range bsz)]
                                       [dir (in-range 4)]) : (U BMS False) #f)))
-    (for ([piece-type-spec (in-vector (vector-drop piece-type-specs 1))]
-          [pti (in-range (sub1 (vector-length piece-type-specs)))])
+    (for ([piece-type-spec (in-vector pts)]
+          [pti (in-range (vector-length pts))])
       (for ([loc bsz])
         (for ([dir (in-range *num-prim-move-translations*)]
               [dir-trans (in-list *prim-move-translations*)])

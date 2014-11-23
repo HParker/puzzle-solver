@@ -96,10 +96,10 @@
          [expand-them (for ([p-to-expand current-fringe-vec])
                         (set! exp-ptr (expand* p-to-expand exp-ptr)))]
          [res (set->list (for/set ([i exp-ptr]
-                                   #:unless (or (set-member? prev-fringe-set (vector-ref (get-*expansion-space*) i))
-                                                (position-in-vec? current-fringe-vec (vector-ref (get-*expansion-space*) i))))
-                           (when (is-goal? (vector-ref (get-*expansion-space*) i)) (set! *found-goal* (vector-ref (get-*expansion-space*) i)))
-                           (vector-ref (get-*expansion-space*) i)))]
+                                   #:unless (or (set-member? prev-fringe-set (vector-ref *expansion-space* i))
+                                                (position-in-vec? current-fringe-vec (vector-ref *expansion-space* i))))
+                           (when (is-goal? (vector-ref *expansion-space* i)) (set! *found-goal* (vector-ref *expansion-space* i)))
+                           (vector-ref *expansion-space* i)))]
          )
     #|(printf "Finished the work packet generating a set of ~a positions~%" (set-count res))
     (for ([p res])
@@ -259,11 +259,11 @@
     ;; sort the vector
     (set! sort-time (current-milliseconds))
     ;(vector-sort! hcposition<? (get-*expansion-space*))
-    (vector-sort! (get-*expansion-space*) hcposition<? 0 pcount)
+    (vector-sort! *expansion-space* hcposition<? 0 pcount)
     (set! sort-time (- (current-milliseconds) sort-time))
     ;; write the first pcount positions to the file
     (set! write-time (current-milliseconds))
-    (set! this-batch (write-fringe-to-disk (get-*expansion-space*) fullpath pcount #t))
+    (set! this-batch (write-fringe-to-disk *expansion-space* fullpath pcount #t))
     (set! write-time (- (current-milliseconds) write-time))
     ;; return the two values: augmented list of filespecs, and the incremented number of duplicates eliminated during writing
     (values (cons (make-filespec f this-batch (file-size fullpath) *local-store*)
