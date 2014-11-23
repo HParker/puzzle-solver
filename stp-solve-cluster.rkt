@@ -104,7 +104,8 @@
     #|(printf "Finished the work packet generating a set of ~a positions~%" (set-count res))
     (for ([p res])
       (printf "pos: ~a~%~a~%" (stringify p) p))|#
-    (for ([sgmnt (fringe-segments pf)]) (delete-file (filespec-fullpathname sgmnt)))
+    (unless *preserve-prior-fringes*
+      (for ([sgmnt (fringe-segments pf)]) (delete-file (filespec-fullpathname sgmnt))))
     (write-fringe-to-disk (list->vector (sort res hcposition<?)) new-cf-fullpath)
     (make-fringe *share-store*
                  (list (make-filespec new-cf-name (length res) (file-size new-cf-fullpath) *share-store*))
@@ -477,9 +478,10 @@
          [merge-end (current-seconds)]
          ;; -------------------------------------------
          ;; delete previous fringe now that duplicates have been removed
-         [delete-previous-fringe (begin (delete-fringe pf)
-                                        (when (string=? *master-name* "localhost") ; delete the *local-store* prev-fringe
-                                          (delete-fringe pf *local-store*)))]
+         [delete-previous-fringe (unless *preserve-prior-fringes*
+                                   (delete-fringe pf)
+                                   (when (string=? *master-name* "localhost") ; delete the *local-store* prev-fringe
+                                     (delete-fringe pf *local-store*)))]
          [sorted-expansion-files (map first sorted-segment-fspecs)]
          [sef-lengths (map second sorted-segment-fspecs)]
          [new-cf-name (format "fringe-d~a" depth)]
