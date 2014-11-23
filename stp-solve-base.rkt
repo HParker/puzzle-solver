@@ -23,10 +23,11 @@
 |#
 (provide (all-defined-out))
 
+#| merge-conflict
 ;; a vector of mutable pairs holding piece-type and location
 (define *expandbuf* (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*) (lambda (_) (mcons 0 (make-bytes *num-pieces*)))))
 (define *piecelocvec* (make-vector *bsz* #f));; vector boolean representing used move locations where the index is the location to which a single piece was moved
-
+|#
 
 ;; hcposition<?: hc-position hc-position -> boolean
 (define: (hcposition<? [p1 : hc-position] [p2 : hc-position]) : Boolean

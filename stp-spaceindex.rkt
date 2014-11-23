@@ -144,37 +144,6 @@
          [dcol (- (cdr c2) (cdr c1))])
     (rcpair->rcbyte (cons drow dcol))))
 
-          
-
-
-;; canonize: N N N N -> byte-string
-;; convert the four blank locations into a canonical (3-byte) blank-configuration
-(define (canonize b1 b2 b3 b4)
-  (bytes (locs->rcbyte b1 b2) (locs->rcbyte b2 b3) (locs->rcbyte b3 b4)))
-
-;; decanonize: byte-string (N . N) -> (listof loc)
-;; map a canonical rep into list of locations
-(define (decanonize bs rcref)
-  (let* ([b1b2 (rcbyte->rcpair (bytes-ref bs 0))]
-         [b2b3 (rcbyte->rcpair (bytes-ref bs 1))]
-         [b3b4 (rcbyte->rcpair (bytes-ref bs 2))]
-         [b2 (rc+ rcref b1b2)]
-         [b3 (rc+ b2 b2b3)]
-         [b4 (rc+ b3 b3b4)])
-    (list (cell-to-loc rcref)
-          (cell-to-loc b2)
-          (cell-to-loc b3)
-          (cell-to-loc b4))))
-
-;; locs->rcbyte: N N -> rcbyte
-;; convert the  difference between two locations to single rcbyte
-(define (locs->rcbyte loc1 loc2)
-  (let* ([c1 (loc-to-cell loc1)]
-         [c2 (loc-to-cell loc2)]
-         [drow (- (car c2) (car c1))]
-         [dcol (- (cdr c2) (cdr c1))])
-    (rcpair->rcbyte (cons drow dcol))))
-
 ;;-------------------------------------------------------------------------
 
 ;; compile-spaceindex: string -> void
