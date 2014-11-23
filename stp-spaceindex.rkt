@@ -309,7 +309,7 @@
 
 ;(climbpro24-init)
 ;(time (compile-ms-array! *piece-types* *bh* *bw*))
-;(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*)))
+(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*)))
 
 ;; canonicalize the *start* blank-configuration
 #|

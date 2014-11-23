@@ -61,6 +61,7 @@ for my $n (1..$n_workers) {
 
 $SIG{__DIE__} = sub { finish; die $_; };
 
-system qw<racket stp-solve-cluster.rkt>;
+# system qw<racket stp-solve-cluster.rkt>;
+system qw<racket stp-master.rkt>;
 
 finish;

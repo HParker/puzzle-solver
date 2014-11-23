@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 
 (provide (all-defined-out))
 
@@ -16,10 +16,13 @@ This file is under version control.  Create a _copy_ named "configenv.rkt" to th
 
 |#
 
+;;--- Environment values -----------
 (define *master-name* "wcpkneel")
 (define *local-store* "/state/partition1/fringefiles/")
 (define *share-store* "/share/bigspace/fringefiles/")
 (define *n-processors* 36)
+
+;;--- Search values ----------------
 #| *late-duplicate-removal*: whether duplicates with prev- and current-fringes are checked on initial local-merge (#f)
       or whether duplicates are forwarded to merge phase and only checked on final merge (#t)
       Tests (and analysis) show that when the number of processors gets high enough (36 is sufficiently high),
@@ -27,5 +30,10 @@ This file is under version control.  Create a _copy_ named "configenv.rkt" to th
       For local n-core runs, set this #f.
 |#
 (define *late-duplicate-removal* #t)
-(define *puzzle-name* "climb12") ;; one of climb12, climb15, climbpro24
 (define *preserve-prior-fringes* #f)
+
+;;--- Puzzle values ----------------
+(define *puzzle-name* "climb12") ;; one of climb12, climb15, climbpro24
+(define *max-depth* 60)
+
+
