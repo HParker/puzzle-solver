@@ -12,15 +12,20 @@ Provide defining values for the following global variables:
   *n-processors* : the number of processors to use
   *late-duplicate-removal* : (boolean) remove duplicates after [after what again?]
 
-Create a link named "configenv.rkt" to this file if on cluster
+This file is under version control.  Create a _copy_ named "configenv.rkt" to this file if on cluster
 
 |#
 
-(define: *master-name* : String "wcp")
+(define: *master-name* : String "wcpkneel")
 (define: *local-store* : String "/state/partition1/fringefiles/")
-(define: *share-store* : String "/share/data2/fringefiles/")
-(define: *n-processors* : Number 34)
-(define: *late-duplicate-removal* : Boolean #f)
-(define: *puzzle-name* : String "climb12")
-;(define: *puzzle-name* : String "climb15")
-;(define: *puzzle-name* : String "climbpro24")
+(define: *share-store* : String "/share/bigspace/fringefiles/")
+(define: *n-processors* : Number 36)
+#| *late-duplicate-removal*: whether duplicates with prev- and current-fringes are checked on initial local-merge (#f)
+      or whether duplicates are forwarded to merge phase and only checked on final merge (#t)
+      Tests (and analysis) show that when the number of processors gets high enough (36 is sufficiently high),
+      late duplicate removal (trueDDD) has a significant advantage  [see Tasks and Accomplishments: Sat Nov. 22, 2014]
+      For local n-core runs, set this #f.
+|#
+(define: *late-duplicate-removal* : Boolean #t)
+(define: *puzzle-name* : String "climb12") ;; one of climb12, climb15, climbpro24
+(define: *preserve-prior-fringes* : Boolean #f)

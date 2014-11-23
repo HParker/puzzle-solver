@@ -6,6 +6,7 @@
          racket/vector
          )
 
+;<<<<<<< HEAD
 (require/typed racket/set
                [list->set (-> (Listof Any) (Setof Any))])
 
@@ -33,6 +34,29 @@
          *num-spaces* get-*num-spaces*
          *piecelocvec* get-*piecelocvec*
          charify-int 
+;=======
+;(require "stpconfigs/configenv.rkt")
+;
+;(provide EXPAND-SPACE-SIZE
+;         (struct-out hc-position)
+;         make-hcpos
+;         *prim-move-translations* 
+;         *charify-offset*
+;         *piece-types*
+;         *num-pieces*
+;         *bs-ptype-index*
+;         *target*
+;         *bw*
+;         *bh*
+;         *bsz*
+;         *expansion-space*
+;         *start*
+;         *piece-type-template*
+;         *num-spaces*
+;         ;charify 
+;         charify-int 
+;         ;decharify
+;>>>>>>> savetodisk2
          intify
          ;old-positionify ;** temp for testing
          list->bwrep ;; used only during initialization in compile-ms-array! via better-move-schema
@@ -41,6 +65,7 @@
          ;bwrep->list
          cell-to-loc
          loc-to-cell
+;<<<<<<< HEAD
          invalid-cell?
          ;register-loc-to-pair
          ;locs->rcbyte
@@ -48,6 +73,8 @@
          ;rcbyte->rcpair
          ;rc+
          ;rc-
+;=======
+;>>>>>>> savetodisk2
          block10-init
          climb12-init
          ;climb15-init
@@ -70,7 +97,7 @@
 
 ;; INITIALIZE STUFF FOR SLIDING-TILE-SOLVER
 
-(define EXPAND-SPACE-SIZE 500000)
+(define EXPAND-SPACE-SIZE 1000000)
 ;(define EXPAND-SPACE-SIZE 2000000)
 
 ;; move trans for up, right, down and left respectively
@@ -80,6 +107,7 @@
 (define: *max-board-size* : Byte 64)
 
 ;; puzzle specific parameters
+;<<<<<<< HEAD
 (define: *invalid-cells* : (Listof Cell) empty)
 (define: *num-piece-types* : Byte 0)
 (define: *piece-types* : (Vectorof (Setof CellRef)) (vector))
@@ -93,6 +121,21 @@
 (define: *bh* : Byte 0)
 (define: *bsz* : Byte 0)
 (define: *expansion-space* : (Vectorof hc-position) (vector))
+;=======
+;(define *invalid-cells* empty)
+;(define *num-piece-types* 0)
+;(define *piece-types* (vector))
+;(define *num-pieces* 0)
+;(define *start* empty)
+;(define *piece-type-template* (vector)) ; for each piece-type index, stores how many blocks of that type there are
+;(define *num-spaces* 0)
+;(define *bs-ptype-index* (vector));; for a byte's index in a position, store the byte's piece-type
+;(define *target* empty)
+;(define *bw* 0)
+;(define *bh* 0)
+;(define *bsz* 0)
+;(define *expansion-space* (vector))
+;>>>>>>> savetodisk2
 ;(define *bsbuffer* #"") ;; a reusable buffer for holding expansions of a given position
 (define: *cell-to-loc* : (Array (U Byte False)) (array 0 : (U Byte False)))
 (define: *loc-to-cell* : (Vectorof Cell) (vector))
@@ -101,6 +144,7 @@
 ;;(define: *expandbuf* : (Vectorof (MPairof Byte Bytes)) (vector (mcons 1 #"0")))
 
 
+;<<<<<<< HEAD
 
 ;; init-all!: piece-type-vector prepos target N N (listof (N . N)) string -> void
 ;; generic setter for use by puzzle-specific initialization functions
@@ -115,6 +159,20 @@
   ;(set! *piece-types* (ann (vector-map list->set ptv) (Vectorof (Setof CellRef))));****
   #|(set! *piece-types* (for/vector: : (Vectorof (Setof Any)) ([cell-specs : (Listof CellRef) ptv])
                         (list->set cell-specs)))|#
+#|
+=======
+;; init-all!: piece-type-vector pre-position-list target N N (listof (N . N)) -> void
+;; generic setter for use by puzzle-specific initialization functions
+(define (init-all! ptv s t nrow ncol invalid)
+  (init-cell-loc-maps! nrow ncol invalid)
+  (set! *bh* nrow)
+  (set! *bw* ncol)
+  (set! *bsz* (- (* nrow ncol) (length invalid)))
+  (set! *num-piece-types* (vector-length ptv)) ;; must come before bw-positionify/(pre-compress)
+  (set! *piece-types* (for/vector ([cell-specs ptv])
+                        (list->set cell-specs)));****
+>>>>>>> savetodisk2
+|#
   (set! *invalid-cells* invalid)
   (set! *num-pieces* (assert (+ (length (prepos-tspecs s)) (length (prepos-spaces s))) byte?)) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
   (set! *start* (make-hcpos (charify (bw-positionify (pre-compress s)))))
@@ -122,6 +180,7 @@
                                 ([pt : (Listof Loc) (old-positionify (bw-positionify (pre-compress s)))])
                                 (assert (length pt) byte?)))
   (set! *num-spaces* (vector-ref *piece-type-template* 0))
+;<<<<<<< HEAD
   (set! *expansion-space* (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*))))) ;(Vectorof hc-position)))
   #|
   (set! *expandbuf* (cast (build-vector (* (vector-ref *piece-type-template* 0) *num-pieces*)
@@ -136,7 +195,20 @@
              [index : Byte *num-piece-types*])
             (append res (for/list: : (Listof Byte) ([i : Byte ptype-count]) index))))
          (Vectorof Byte)))
-        
+#|        
+=======
+  ;(set! *expandpos* (make-vector (vector-ref *piece-type-template* 0) #f)) ;; any single piece can never generate more than the number of spaces
+  (set! *expansion-space* (build-vector (+ EXPAND-SPACE-SIZE *bsz*) (lambda (_) (hc-position 0 (make-bytes *num-pieces*)))))
+  ;(set! *bsbuffer* (make-bytes (* 4 *num-pieces*) 0))
+  (set! *bs-ptype-index* (for/vector #:length *num-pieces* 
+                           ([i *num-pieces*])
+                           (for/last ([ptindex-for-i *num-piece-types*]
+                                      #:break (< i (for/sum ([ptype-count *piece-type-template*]
+                                                             [x ptindex-for-i])
+                                                     ptype-count)))
+                             ptindex-for-i)))
+>>>>>>> savetodisk2
+|#
   ;; should set *target* to a bytestring index and an expected location for that indexed value
   ;;******** this only works for a single goal-spec for a tile-type with only one instance, but ....
   (set! *target* (cons (assert (for/sum: : Integer ([ntypes : Byte (in-vector *piece-type-template*)]
@@ -267,6 +339,7 @@
 
 (define (block10-init)
   (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells*))
+;<<<<<<< HEAD
 
 (define (climb12-init)
   (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells*))
@@ -282,3 +355,157 @@
   ;(("climb15") (climb15-init))
   ;(("climbpro24") (climbpro24-init))
   (else (error 'stp-init "puzzle-name missing or unknown in stpconfigs/configenv.rkt")))
+#|
+=======
+
+;;------------------------------------------------------------------------------------------------------
+;; CLIMB-12 PUZZLE INIT
+;; piece-type is implicit in position within list, each pair specifies the cells of the piece
+;; and their location relative to the (arbitrary) origin of that piece, (0 0).
+(define *climb12-piece-types*
+  '#((reserved-spaces)
+     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
+     ((0 . 0)(0 . 1)(1 . 0))                   ; 2  Upper Left pointing L
+     ((0 . 0)(1 . -1)(1 . 0))                  ; 3  Lower Right pointing L
+     ((0 . 0)(1 . 0))                          ; 4  2x1 vertical rectangle
+     ((0 . 0)(0 . 1))                          ; 5  1x2 horizontal rectangle
+     ((0 . 0))))                               ; 6  1x1 unit square
+
+;; specify board-state by triples: piece-type, board-row, board-col
+(define *climb12-start*
+  '((1 4 . 2)
+    (2 2 . 1)
+    (3 2 . 3)
+    (4 1 . 0)
+    (4 1 . 4)
+    (5 4 . 0)
+    (5 4 . 3)
+    (6 3 . 0)
+    (6 3 . 4)
+    (6 5 . 0)
+    (6 5 . 4)
+    ((0 . 2) (1 . 1) (1 . 2) (1 . 3))  ; spaces
+    ))
+
+;; specify target as triple: piece-type, board-row, board-col
+(define *climb12-name* "climb12")
+(define *climb12-target* '((1 0 . 2)))
+(define *climb12-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
+
+(define (climb12-init)
+  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells*))
+
+;;------------------------------------------------------------------------------------------------------
+;; CLIMB-15 PUZZLE INIT
+;; (variation 1: 104 moves)
+(define *climb15-piece-types*
+  '#((reserved-spaces)
+     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
+     ((0 . 0)(0 . 1)(1 . 0))                   ; 2  Upper Left pointing L
+     ((0 . 0)(1 . -1)(1 . 0))                  ; 3  Lower Right pointing L
+     ((0 . 0)(1 . 0)(1 . 1))                   ; 4  Lower Left pointing L
+     ((0 . 0)(0 . 1)(1 . 1))                   ; 5  Upper Right pointing L
+     ((0 . 0)(1 . 0))                          ; 6  2x1 vertical rectangle
+     ((0 . 0)(0 . 1))                          ; 7  1x2 horizontal rectangle
+     ((0 . 0))                                 ; 8  1x1 unit square
+     ((0 . 0)(0 . 1)(1 . 0)(1 . 1))))          ; 9  2x2 square
+     
+(define *climb15-start*
+  '((1 6 . 2)
+    (2 2 . 0)
+    (3 2 . 2)
+    (4 4 . 2)
+    (5 4 . 3)
+    (6 2 . 3)
+    (6 2 . 4)
+    (7 6 . 0)
+    (7 6 . 3)
+    (8 1 . 0)
+    (8 1 . 4)
+    (8 7 . 0)
+    (8 7 . 4)
+    (9 4 . 0)
+    ((0 . 2)(1 . 1)(1 . 2)(1 . 3))
+    ))
+
+(define *climb15-name* "climb15")
+(define *climb15-target* '((1 0 . 2)))
+(define *climb15-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
+
+(define (climb15-init)
+  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells*))
+
+;;------------------------------------------------------------------------------------------------------
+;; CLIMB-24-PRO PUZZLE INIT
+;; 22? moves
+;;  From Minoru Abe -- http://www.johnrausch.com/slidingblockpuzzles/abe.htm
+;;           _
+;; 0   _____|x|_____
+;; 1  |___|x x x|___|
+;; 2  |   |_____|   |
+;; 3  |___| |_  |___|
+;; 4  |_  |___|_|  _|
+;; 5  | |_| |_| |_| |
+;; 6  |_| |_|_|_| |_|
+;; 7  |___|_____|___|
+;; 8  |   |_| |_|   |
+;; 9  |___|_____|___|
+
+(define *climbpro24-name* "climbpro24")
+(define *climbpro24-target* '((1 0 . 3)))
+(define *climbpro24-invalid-cells* '((0 . 0)(0 . 1)(0 . 2)(0 . 4)(0 . 5)(0 . 6)))
+
+(define *climbpro24-piece-types*
+  '#((reserved-spaces)
+     ((0 . 0)(1 . -1)(1 . 0)(1 . 1))           ; 1  4 square T (stem up)
+     ((0 . 0)(0 . 1)(1 . 0)(1 . 1))            ; 2  2x2 square
+     ((0 . 0)(0 . 1)(1 . 0))                   ; 3  Upper Left pointing L
+     ((0 . 0)(0 . 1)(1 . 1))                   ; 4  Upper Right pointing L
+     ((0 . 0)(1 . -1)(1 . 0))                  ; 5  Lower Right pointing L
+     ((0 . 0)(1 . 0)(1 . 1))                   ; 6  Lower Left pointing L
+     ((0 . 0)(1 . 0))                          ; 7  2x1 vertical rectangle
+     ((0 . 0)(0 . 1))                          ; 8  1x2 horizontal rectangle
+     ((0 . 0)(0 . 1)(0 . 2))                   ; 9  1x3 horizontal rectangle
+     ((0 . 0))))                               ; 10 1x1 unit square
+
+(define *climbpro24-start*
+  '((1 8 . 3)    ; T piece
+    (2 2 . 0)    ; 2x2
+    (2 2 . 5)    ; 2x2
+    (2 8 . 0)    ; 2x2
+    (2 8 . 5)    ; 2x2
+    (3 4 . 5)    ; up-left L
+    (4 3 . 3)    ; up-right L
+    (4 4 . 0)    ; up-right L
+    (5 6 . 1)    ; down-right L
+    (6 3 . 2)    ; down-left L
+    (6 6 . 5)    ; down-left L
+    (7 5 . 0)    ; 2x1 (vertical)
+    (7 5 . 2)    ; 2x1 (vertical)
+    (7 5 . 4)    ; 2x1 (vertical)
+    (7 5 . 6)    ; 2x1 (vertical)
+    (8 1 . 0)    ; 1x2 (horizontal)
+    (8 1 . 5)    ; 1x2 (horizontal)
+    (9 2 . 2)    ; 1x3 (horizontal)
+    (9 7 . 2)    ; 1x3 (horizontal)
+    (10 5 . 3)   ; 1x1
+    (10 6 . 3)   ; 1x1
+    (10 8 . 2)   ; 1x1
+    (10 8 . 4)   ; 1x1
+    ((0 . 3)(1 . 2)(1 . 3)(1 . 4))
+    ))
+
+(define (climbpro24-init)
+  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells*))
+
+
+;;------------------------------------------------------------------------------------------------------
+;; using the config in stpconfigs/configenv.rkt
+
+(case *puzzle-name*
+  (("climb12") (climb12-init))
+  (("climb15") (climb15-init))
+  (("climbpro24") (climbpro24-init))
+  (else (error 'stp-init.rkt "puzzle-name missing or unknown in stpconfigs/configenv.rkt")))
+>>>>>>> savetodisk2
+|#

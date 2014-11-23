@@ -7,9 +7,10 @@
          racket/format)
 
 (require 
- ;racket/generator
- "stp-init.rkt"
- "stp-solve-base.rkt")
+  ;racket/generator
+  "stpconfigs/configenv.rkt"
+  "stp-init.rkt"
+  "stp-solve-base.rkt")
 
 (provide (all-defined-out))
 

@@ -8,7 +8,10 @@
  ;test-engine/racket-tests
  ;racket/generator
  "stpconfigs/configenv.rkt"
+;<<<<<<< HEAD
  "stp-datatypes.rkt"
+;=======
+;>>>>>>> savetodisk2
  "stp-init.rkt"
  "stp-solve-base.rkt"
  )
@@ -17,6 +20,8 @@
 
 (define *spaceindex* "the hashtable to hold the possible moves indexed by space configurations")
 (define ret-false (lambda () #f))
+;(define *piecelocvec* (make-vector *bsz* #f));; vector boolean representing used move locations where the index is the location to which a single piece was moved
+  
 
 
 ;;------------------------------------------------------------------------------------------------------
@@ -47,6 +52,67 @@
 
 ;;---- UTILITIES ----------------------------------------------------------
 
+(define *rcpair-to-rcbyte*
+  (make-array (shape -2 (+ *bh* 4) (- *bw*) (add1 *bw*))))
+(define *rcbyte-to-rcpair* (vector))
+(define (compile-transitions)
+  (for* ([r (in-range -2 (+ *bh* 4))]
+         [c (in-range (- *bw*) (add1 *bw*))])
+    (array-set! *rcpair-to-rcbyte* r c (slow-rcpair->rcbyte (cons r c))))
+  (set! *rcbyte-to-rcpair*
+        (build-vector (* (+ *bh* 2 4) (add1 (* 2 *bw*))) (lambda (loc-byte) (slow-rcbyte->rcpair (+ loc-byte *charify-offset*))))))
+
+;; rcpair->rcbyte: (N . N) -> byte
+;; rcpair->rcbyte: (N . N) -> byte
+;; convert a row-col pair where the row value in range [-2,*bh*+2] and col in range [-*bw*,+*bw*] into a rcbyte
+;(define: (slow-rcpair->rcbyte [rcp : (Pairof Fixnum Fixnum)]) : Byte
+(define (slow-rcpair->rcbyte rcp)
+  (when (or (< (car rcp) -2) (< (cdr rcp) (- *bw*)))
+    (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
+  (+ (bitwise-ior (arithmetic-shift (+ (car rcp) 2) 4) ;; the two is for the negative rows, the 4 is the high-four bits
+                  (+ (get-*bw*) (cdr rcp)))
+     *charify-offset*))
+
+(define (rcpair->rcbyte rcp)
+  (array-ref *rcpair-to-rcbyte* (car rcp) (cdr rcp)))
+
+;; rcbyte->rcpair: byte -> (N . N)
+;; recover the row-col pair from the byte
+;(define: (rcbyte->rcpair [b : Byte]) : (Pairof Fixnum Fixnum)
+(define (slow-rcbyte->rcpair b)
+  (let ([decharified-b (- b *charify-offset*)])
+    (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
+          (- (bitwise-and decharified-b 15) *bw*))))
+
+(define (rcbyte->rcpair b)
+  (vector-ref *rcbyte-to-rcpair* (- b *charify-offset*)))
+
+(compile-transitions)
+
+
+;; register-loc-to-pair: N (N . N) -> (N . N)
+;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
+;(define: (register-loc-to-pair [loc : Loc] [ref : Cell]) : Cell
+(define (register-loc-to-pair loc ref) 
+  (register-cell-to-pair (loc-to-cell loc) ref))
+
+;; register-cell-to-pair: (N . N) (N . N) -> (N . N)
+;; given actual cell and reference for blank-config, convert cell to canonical row-col pair
+;(define: (register-cell-to-pair [cell : Cell] [ref : Cell]) : Cell
+(define (register-cell-to-pair cell ref)
+  (rc- cell ref))
+
+(define (deregister-pair-to-cell ref pair)
+  (register-cell-to-pair ref pair))
+
+;; rc+/-: (N . N) (N . N) -> (N . N)
+;; add or subtract the given cons pairs
+;(define: (rc+ [p1 : (Pairof Fixnum Fixnum)] [p2 : (Pairof Fixnum Fixnum)]) : (Pairof Fixnum Fixnum)
+(define (rc+ p1 p2)
+  (cons (+ (car p1) (car p2)) (+ (cdr p1) (cdr p2))))
+(define (rc- p1 p2)
+  (cons (- (car p1) (car p2)) (- (cdr p1) (cdr p2))))
+
 ;; canonize: N N N N -> byte-string
 ;; convert the four blank locations into a canonical (3-byte) blank-configuration
 ;(define: (canonize [b1 : Loc] [b2 : Loc] [b3 : Loc] [b4 : Loc]) : Bytes
@@ -68,20 +134,6 @@
           (cell-to-loc b3)
           (cell-to-loc b4))))
 
-;; transferred from stp-spacenidex.rkt
-          
-;; register-loc-to-pair: N (N . N) -> (N . N)
-;; given an actual location and the reference for the blank-config, convert location to canonical row-col pair
-;(define: (register-loc-to-pair [loc : Loc] [ref : Cell]) : Cell
-(define (register-loc-to-pair loc ref) 
-  (register-cell-to-pair (loc-to-cell loc) ref))
-
-;; register-cell-to-pair: (N . N) (N . N) -> (N . N)
-;; given actual cell and reference for blank-config, convert cell to canonical row-col pair
-;(define: (register-cell-to-pair [cell : Cell] [ref : Cell]) : Cell
-(define (register-cell-to-pair cell ref)
-  (rc- cell ref))
-
 ;; locs->rcbyte: N N -> rcbyte
 ;; convert the  difference between two locations to single rcbyte
 ;(define: (locs->rcbyte [loc1 : Loc] [loc2 : Loc]) : Byte
@@ -92,32 +144,36 @@
          [dcol (- (cdr c2) (cdr c1))])
     (rcpair->rcbyte (cons drow dcol))))
 
-;; rcpair->rcbyte: (N . N) -> byte
-;; convert a row-col pair where the row value in range [0,*bh*) and col in range [-*bw*,+*bw*] into a rcbyte
-;(define: (rcpair->rcbyte [rcp : (Pairof Fixnum Fixnum)]) : Byte
-(define (rcpair->rcbyte rcp)
-  (when (or (< (car rcp) -2) (< (cdr rcp) (- (get-*bw*))))
-    (error (format "rcpair->rcbyte: negative value in (~a,~a)~%" (car rcp) (cdr rcp))))
-  (+ (bitwise-ior (arithmetic-shift (+ (car rcp) 2) 4) ;; the two is for the negative rows, the 4 is the high-four bits
-                  (+ (get-*bw*) (cdr rcp)))
-     *charify-offset*))
+          
 
-;; rcbyte->rcpair: byte -> (N . N)
-;; recover the row-col pair from the byte
-;(define: (rcbyte->rcpair [b : Byte]) : (Pairof Fixnum Fixnum)
-(define (rcbyte->rcpair b)
-  (let ([decharified-b (- b *charify-offset*)])
-    (cons (- (arithmetic-shift (bitwise-and decharified-b 240) -4) 2)
-          (- (bitwise-and decharified-b 15) (get-*bw*)))))
 
-;; rc+/-: (N . N) (N . N) -> (N . N)
-;; add or subtract the given cons pairs
-;(define: (rc+ [p1 : (Pairof Fixnum Fixnum)] [p2 : (Pairof Fixnum Fixnum)]) : (Pairof Fixnum Fixnum)
-(define (rc+ p1 p2)
-  (cons (+ (car p1) (car p2)) (+ (cdr p1) (cdr p2))))
-(define (rc- p1 p2)
-  (cons (- (car p1) (car p2)) (- (cdr p1) (cdr p2))))
+;; canonize: N N N N -> byte-string
+;; convert the four blank locations into a canonical (3-byte) blank-configuration
+(define (canonize b1 b2 b3 b4)
+  (bytes (locs->rcbyte b1 b2) (locs->rcbyte b2 b3) (locs->rcbyte b3 b4)))
 
+;; decanonize: byte-string (N . N) -> (listof loc)
+;; map a canonical rep into list of locations
+(define (decanonize bs rcref)
+  (let* ([b1b2 (rcbyte->rcpair (bytes-ref bs 0))]
+         [b2b3 (rcbyte->rcpair (bytes-ref bs 1))]
+         [b3b4 (rcbyte->rcpair (bytes-ref bs 2))]
+         [b2 (rc+ rcref b1b2)]
+         [b3 (rc+ b2 b2b3)]
+         [b4 (rc+ b3 b3b4)])
+    (list (cell-to-loc rcref)
+          (cell-to-loc b2)
+          (cell-to-loc b3)
+          (cell-to-loc b4))))
+
+;; locs->rcbyte: N N -> rcbyte
+;; convert the  difference between two locations to single rcbyte
+(define (locs->rcbyte loc1 loc2)
+  (let* ([c1 (loc-to-cell loc1)]
+         [c2 (loc-to-cell loc2)]
+         [drow (- (car c2) (car c1))]
+         [dcol (- (cdr c2) (cdr c1))])
+    (rcpair->rcbyte (cons drow dcol))))
 
 ;;-------------------------------------------------------------------------
 
@@ -299,10 +355,6 @@
     expanded-ptr))
 
 
-
-;(block10-init)   ;  160010 possible even-better-move-schema
-;(climb12-init)
-;(climb15-init)   ; 
 ;(climbpro24-init)
 ;(time (compile-ms-array! (get-*piece-types*) (get-*bh*) (get-*bw*)))
 ;(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" (get-*puzzle-name*))))
