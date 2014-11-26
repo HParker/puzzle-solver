@@ -23,6 +23,7 @@ Create a link named "configenv.rkt" to this file if on cluster
 (define *share-store* "/share/bigspace/fringefiles/")
 ;(define *share-store* "/space/bigspace/fringefiles/")
 ;(define *share-store* "fringefiles/")
-(define *n-processors* 18)
+(define *n-processors* 90)
 (define *late-duplicate-removal* #t)
+(define *puzzle-name* "climbpro24")
 

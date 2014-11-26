@@ -5,12 +5,13 @@
          racket/set
          )
 
+(require "stpconfigs/configenv.rkt")
+
 (provide EXPAND-SPACE-SIZE
          (struct-out hc-position)
          make-hcpos
          *prim-move-translations* 
          *charify-offset*
-         *puzzle-name*
          *piece-types*
          *num-pieces*
          *bs-ptype-index*
@@ -77,8 +78,8 @@
 
 ;; INITIALIZE STUFF FOR SLIDING-TILE-SOLVER
 
-;(define EXPAND-SPACE-SIZE 500000)
 (define EXPAND-SPACE-SIZE 1000000)
+;(define EXPAND-SPACE-SIZE 2000000)
 
 ;; move trans for up, right, down and left respectively
 (define *prim-move-translations* '((-1 . 0) (0 . 1) (1 . 0) (0 . -1)))
@@ -86,10 +87,9 @@
 (define *max-board-size* 64)
 
 ;; puzzle specific parameters
-(define *puzzle-name* "a string identifying the puzzle for selecting possible configuration files")
 (define *invalid-cells* empty)
 (define *num-piece-types* 0)
-(define *piece-types* empty)
+(define *piece-types* (vector))
 (define *num-pieces* 0)
 (define *start* empty)
 (define *piece-type-template* (vector)) ; for each piece-type index, stores how many blocks of that type there are
@@ -105,17 +105,16 @@
 (define *loc-to-cell* "1d vector of loc indexing to row-col cell-pairs")
 
 
-;; init-all!: piece-type-vector pre-position-list target N N (listof (N . N)) string -> void
+;; init-all!: piece-type-vector pre-position-list target N N (listof (N . N)) -> void
 ;; generic setter for use by puzzle-specific initialization functions
-(define (init-all! ptv s t nrow ncol invalid pzlname)
+(define (init-all! ptv s t nrow ncol invalid)
   (init-cell-loc-maps! nrow ncol invalid)
-  (set! *puzzle-name* pzlname)
   (set! *bh* nrow)
   (set! *bw* ncol)
   (set! *bsz* (- (* nrow ncol) (length invalid)))
   (set! *num-piece-types* (vector-length ptv)) ;; must come before bw-positionify/(pre-compress)
   (set! *piece-types* (for/vector ([cell-specs ptv])
-                                  (list->set cell-specs)));****
+                        (list->set cell-specs)));****
   (set! *invalid-cells* invalid)
   (set! *num-pieces* (+ (length s) -1 (length (last s)))) ;; includes spaces -- may be used as length of position bytestring instead of bytes-length
   (set! *start* (make-hcpos (charify (bw-positionify (pre-compress s)))))
@@ -167,7 +166,7 @@
 ;; convert a bitwise represented position into a series of bytes
 (define (charify bw-p)
   (for/fold ([res #""])
-    ([pt bw-p])
+    ([pt (in-vector bw-p)])
     (bytes-append res (charify-int pt))))
 
 ;; charify-int: int -> bytearray
@@ -185,7 +184,7 @@
   (if (eof-object? ba)
       ba
       (let ([running-start 0])
-        (for/vector ([num-of-pt *piece-type-template*])
+        (for/vector ([num-of-pt (in-vector *piece-type-template*)])
           (let ([res (intify ba running-start (+ running-start num-of-pt))])
             (set! running-start (+ running-start num-of-pt))
             res)))))
@@ -200,18 +199,18 @@
   (for/sum ([pref (in-range start end)])
     (arithmetic-shift 1 (- (bytes-ref bs pref) *charify-offset*))))
 
-;; bw-positionify: old-position -> bw-position
+;; bw-positionify: (listof (cons tile-id (listof cell))) -> bw-position
 ;; create a bitwise-'position' representation of a board state based on the given start-list pre-position format
 ;;*** called only during initialization
 (define (bw-positionify old-position)
-  (for/vector ([pspec old-position]
+  (for/vector ([pspec (in-list old-position)]
                [i (in-range *num-piece-types*)])
     (unless (= i (first pspec)) (error 'positionify "mis-matched piece-type in vector representation of position"))
     (list->bwrep (map cell-to-loc (cdr pspec)))))
 
 ;; old-positionify: bw-position -> old-position
 (define (old-positionify bw-position)
-  (for/vector ([bwrep bw-position])
+  (for/vector ([bwrep (in-vector bw-position)])
     (bwrep->list bwrep)))
 
 ;; list->bwrep: (listof loc) -> int
@@ -221,7 +220,7 @@
            (+ (arithmetic-shift 1 a-loc) bwint))
          0
          lo-loc)|#
-  (for/sum ([a-loc lo-loc]) (arithmetic-shift 1 a-loc)))
+  (for/sum ([a-loc (in-list lo-loc)]) (arithmetic-shift 1 a-loc)))
 
 ;; bwrep-direct: N N N N -> fixnum
 ;; get the blank-int directly from the locations of the four blanks
@@ -283,7 +282,7 @@
 (define *block10-invalid-cells* '((0 . 0) (0 . 3)))
 
 (define (block10-init)
-  (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells* *block10-name*))
+  (init-all! *block10-piece-types* *block10-start* *block10-target* 6 4 *block10-invalid-cells*))
 
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-12 PUZZLE INIT
@@ -320,7 +319,7 @@
 (define *climb12-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
 
 (define (climb12-init)
-  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells* *climb12-name*))
+  (init-all! *climb12-piece-types* *climb12-start* *climb12-target* 6 5 *climb12-invalid-cells*))
 
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-15 PUZZLE INIT
@@ -360,7 +359,7 @@
 (define *climb15-invalid-cells* '((0 . 0) (0 . 1) (0 . 3) (0 . 4)))
 
 (define (climb15-init)
-  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells* *climb15-name*))
+  (init-all! *climb15-piece-types* *climb15-start* *climb15-target* 8 5 *climb15-invalid-cells*))
 
 ;;------------------------------------------------------------------------------------------------------
 ;; CLIMB-24-PRO PUZZLE INIT
@@ -423,11 +422,14 @@
     ))
 
 (define (climbpro24-init)
-  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells* *climbpro24-name*))
+  (init-all! *climbpro24-piece-types* *climbpro24-start* *climbpro24-target* 10 7 *climbpro24-invalid-cells*))
 
 
 ;;------------------------------------------------------------------------------------------------------
-;(block10-init) ; for local testing
-;(climb12-init)
-(climb15-init)
-;(climbpro24-init)
+;; using the config in stpconfigs/configenv.rkt
+
+(case *puzzle-name*
+  (("climb12") (climb12-init))
+  (("climb15") (climb15-init))
+  (("climbpro24") (climbpro24-init))
+  (else (error 'stp-init.rkt "puzzle-name missing or unknown in stpconfigs/configenv.rkt")))
