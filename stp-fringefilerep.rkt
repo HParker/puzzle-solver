@@ -267,7 +267,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; reports the number of positions in the given fringe file assuming the file was written with write-fringe-to-disk
 (define (position-count-in-file f)
   (/ (file-size f) *num-pieces*))
-                    
+
 ;; check-sorted-fringe?: string -> boolean
 ;; assuming the string, f, points to a sorted file of positions, check to make sure they are sorted
 (define (check-sorted-fringe? f)
@@ -295,8 +295,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
      path-to-fringe-segments ;;*share-store*
      (for/list ([i (in-range n-seg)])
        (let* ([f (format "~a~a" base-string (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
-              [lpcount (read-from-string (with-output-to-string 
-                                          (lambda () (position-count-in-file (string-append path-to-fringe-segments f)))))])
+              [lpcount (position-count-in-file (string-append path-to-fringe-segments f))])
          (set! pcount (+ pcount lpcount))
          (make-filespec f lpcount (file-size (string-append path-to-fringe-segments f)) path-to-fringe-segments)))
      pcount)))
@@ -305,7 +304,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; when a fringe is stored in a single file (instead of being spread over a number of segments),
 ;; create and return the fringe structure consisting of the given file, found in the optional path (expected to be *share-store*)
 (define (make-fringe-from-file file [path-to-fringefile ""])
-  (let ([filepcount (read-from-string (with-output-to-string (lambda () (position-count-in-file file))))])
+  (let ([filepcount (position-count-in-file file)])
     (make-fringe path-to-fringefile
                  (list (make-filespec file filepcount (file-size file) path-to-fringefile))
                  filepcount)))
