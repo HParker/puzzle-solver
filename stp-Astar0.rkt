@@ -84,7 +84,7 @@
 ;; our f-values should be less than 255 and may therefore fit in one byte
 
 ;; fake-buffer: vector of bytestrings for output
-(define fb-capacity 2000000)
+(define fb-capacity 8000000)
 (define fakebuffer (make-vector (+ fb-capacity 200) (make-bytes (add1 *num-pieces*))))
 (define fb-ptr 0)
 
@@ -100,14 +100,15 @@
 ;; write fakebuffer to file but remove duplicates -- preserving the position with lowest g value
 (define (flush-fb [ofile "tobemerged"])
   (let ([last-pos #"noneseenyet"]
-        [actually-written 0])
+        [actually-written 0]
+        [bytes-to-read (add1 *num-pieces*)])
     (printf "flushing fakebuffer with ~a positions~%" fb-ptr)
     (with-output-to-file ofile
       (lambda ()
         (for ([n fb-ptr]
               [p fakebuffer]
               #:unless (bytes=? (subbytes p 1) last-pos))
-          (write-bs->file p (current-output-port) (add1 *num-pieces*))
+          (write-bs->file p (current-output-port) bytes-to-read)
           (set! actually-written (add1 actually-written))))
       #:exists 'replace)
     (set! fb-ptr 0)
@@ -133,26 +134,27 @@
 (define (merge-two-files f1 f2 [ofile "newastarnodelist"])
   (let ([i1 (open-input-file f1)]
         [i2 (open-input-file f2)]
-        [last #"nonprevious"])
+        [last #"nonprevious"]
+        [bytes-to-read (add1 *num-pieces*)])
     (with-output-to-file ofile
       (lambda ()
-        (let mrg ([p1 (read-bytes (add1 *num-pieces*) i1)]
-                  [p2 (read-bytes (add1 *num-pieces*) i2)]
+        (let mrg ([p1 (read-bytes bytes-to-read i1)]
+                  [p2 (read-bytes bytes-to-read i2)]
                   [last-written last])
           (cond [(and (eof-object? p1) (eof-object? p2)) void]
-                [(eof-object? p1) (write-bs->file p2 (current-output-port) (add1 *num-pieces*))
-                                  (mrg p1 (read-bytes (add1 *num-pieces*) i2) p2)]
-                [(eof-object? p2) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                  (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
-                [(bytes=? (subbytes p1 1) (subbytes last-written 1)) (mrg (read-bytes (add1 *num-pieces*) i1) p2 last-written)]
-                [(bytes=? (subbytes p2 1) (subbytes last-written 1)) (mrg p1 (read-bytes (add1 *num-pieces*) i2) last-written)]
-                [(bytes<? (subbytes p1 1) (subbytes p2 1)) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                                           (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
+                [(eof-object? p1) (write-bs->file p2 (current-output-port) bytes-to-read)
+                                  (mrg p1 (read-bytes bytes-to-read i2) p2)]
+                [(eof-object? p2) (write-bs->file p1 (current-output-port) bytes-to-read)
+                                  (mrg (read-bytes bytes-to-read i1) p2 p1)]
+                [(bytes=? (subbytes p1 1) (subbytes last-written 1)) (mrg (read-bytes bytes-to-read i1) p2 last-written)]
+                [(bytes=? (subbytes p2 1) (subbytes last-written 1)) (mrg p1 (read-bytes bytes-to-read i2) last-written)]
+                [(bytes<? (subbytes p1 1) (subbytes p2 1)) (write-bs->file p1 (current-output-port) bytes-to-read)
+                                                           (mrg (read-bytes bytes-to-read i1) p2 p1)]
                 [(and (bytes=? (subbytes p1 1) (subbytes p2 1))
-                      (< (bytes-ref p1 0) (bytes-ref p2 0))) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                                             (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
-                [else (write-bs->file p2 (current-output-port) (add1 *num-pieces*))
-                      (mrg p1 (read-bytes (add1 *num-pieces*) i2) p2)]
+                      (< (bytes-ref p1 0) (bytes-ref p2 0))) (write-bs->file p1 (current-output-port) bytes-to-read)
+                                                             (mrg (read-bytes bytes-to-read i1) p2 p1)]
+                [else (write-bs->file p2 (current-output-port) bytes-to-read)
+                      (mrg p1 (read-bytes bytes-to-read i2) p2)]
                 )))
       #:exists 'replace)
     (close-input-port i1)
@@ -212,7 +214,7 @@
 
 ;; a*-search:  int -> #f or position
 ;; A* search in memory in order to estimate savings of heuristics
-;; fdepth is an actual literal index into the vools vector of open-lists -- only fscores need to be translated
+;; fdepth is an actual literal index into the vools Vector Of Open-Lists -- only fscores need to be translated
 ;; via fscore->voolindex
 (define (a*-search fdepth) 
   (let ([min-voolindex fdepth])
@@ -338,7 +340,7 @@
          [half-c-diff (/ c-diff 2)]
          [mmd (+ half-c-diff r-diff)]
          )
-    (+ mmd (floor (sqr (sub1 (max 1 mmd)))))))
+    (floor (+ mmd (sqr (sub1 (max 1 mmd)))))))
 
 (define (c15-heuristic p)
   (let* ([pt1-loc (- (bytes-ref p 4) *charify-offset*)]
@@ -354,8 +356,8 @@
 
 ;;--- HEURISTICS ------------------------------------------------------
 
-(block10-init)
-;(climb12-init)
+;(block10-init)
+(climb12-init)
 ;(climb15-init)
 ;(climbpro24-init)
 (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
@@ -384,5 +386,5 @@
                              (current-output-port) (add1 *num-pieces*)))
   #:exists 'replace)
 
-;(time (a*-search 0))
-(time (a*-file-search "astarnodelist" (f-score (hc-position-bs *start*))))
+(time (a*-search 0))
+;(time (a*-file-search "astarnodelist" (f-score (hc-position-bs *start*))))
