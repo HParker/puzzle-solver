@@ -68,11 +68,23 @@
   (hc-position-bs *start*))
 
 
+;; fake-init: number -> number
+;; run on worker -- just cause the workers to load the spaceindex
+(define (fake-init i)
+  (add1 i))
+
+;; init-workers: -> void
+;; get the workers to load the spaceindex, etc.
+(define (init-workers)
+  (for/work ([i (in-range *n-processors*)])
+            (fake-init i)))
+
 
 ;#|
 (module+ main
   ;; Switch between these according to if using the cluster or testing on multi-core single machine
   (connect-to-riot-server! *master-name*)
+  (init-workers)
   (define search-result (time (start-cluster-fringe-search *start*)))
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d123-" 90 "/share/bigspace/fringefiles/")
