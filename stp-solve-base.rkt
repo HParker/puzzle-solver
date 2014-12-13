@@ -145,7 +145,7 @@
           [(compare? x (vector-ref v mid)) (vec-member? v x compare? low mid)]
           [else (vec-member? v x compare? (add1 mid) high)])))
 
-  
+ 
 ;; onboard?: cell -> boolean
 (define (onboard? c)
   (and (< -1 (car c) *bh*)

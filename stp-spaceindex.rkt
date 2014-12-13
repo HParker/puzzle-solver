@@ -128,6 +128,12 @@
          [dcol (- (cdr c2) (cdr c1))])
     (rcpair->rcbyte (cons drow dcol))))
 
+;; bw-valid-move?: number number -> boolean
+;; determine if the current location of the spaces supports a move's prerequisites given as space-prereq
+(define (bw-valid-move? space-int space-prereq)
+  (= (bitwise-and space-int space-prereq)
+     space-prereq))
+
 ;;-------------------------------------------------------------------------
 
 ;; compile-spaceindex: string -> void

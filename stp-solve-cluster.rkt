@@ -28,13 +28,6 @@
          expand-fringe-self
          distributed-expand-fringe)
 
-
-(define *expand-multiplier* 1)
-(define *merge-multiplier* 1)
-(define *n-expanders* (* *n-processors* *expand-multiplier*))
-(define *n-mergers* (* *n-processors* *merge-multiplier*))
-
-
 (define *most-positive-fixnum* 0)
 (define *most-negative-fixnum* 0)
 (cond [(fixnum? (expt 2 61))
@@ -48,27 +41,29 @@
 (define *found-goal* #f)
 
 ;;------------------------------------------
-;; proto-fringe slicing
+;; FRINGE SLICING: (proto-)fringe slicing
 
-(define *num-proto-fringe-slices* *n-mergers*)
+(define *worker-multiplier* 2)
+(define *num-fringe-slices* (* *n-processors* *worker-multiplier*))
+
 ;; define the fixed hash-code bounds to be used for repsonsibility ranges and proto-fringe slicing
-(define *proto-fringe-slice-bounds*
-  (let* ([slice-width (floor (/ (- *most-positive-fixnum* *most-negative-fixnum*) *num-proto-fringe-slices*))]
-         [slices (for/vector #:length (add1 *num-proto-fringe-slices*)
-                   ([i *num-proto-fringe-slices*])
+(define *fringe-slice-bounds*
+  (let* ([slice-width (floor (/ (- *most-positive-fixnum* *most-negative-fixnum*) *num-fringe-slices*))]
+         [slices (for/vector #:length (add1 *num-fringe-slices*)
+                   ([i *num-fringe-slices*])
                    (+ *most-negative-fixnum* (* i slice-width)))])
-    (vector-set! slices *num-proto-fringe-slices* (add1 *most-positive-fixnum*))
+    (vector-set! slices *num-fringe-slices* (add1 *most-positive-fixnum*))
     slices))
 
 ;; get-slice-num: fixnum [low number] [hi number] -> number
-;; use binary search to find index for given hash-code within ranges defined by *proto-fringe-slice-bounds*
-(define (get-slice-num phc (low 0) (hi *num-proto-fringe-slices*))
+;; use binary search to find index for given hash-code within ranges defined by *fringe-slice-bounds*
+(define (get-slice-num phc (low 0) (hi *num-fringe-slices*))
   (let ([mid (floor (/ (+ low hi) 2))])
     (cond [(= low mid)
-           (when (>= phc (vector-ref *proto-fringe-slice-bounds* (add1 mid)))
+           (when (>= phc (vector-ref *fringe-slice-bounds* (add1 mid)))
              (error (format "get-slice-num: missed the mark with index ~a for hc=~a~%" mid phc)))
            mid]
-          [(< phc (vector-ref *proto-fringe-slice-bounds* mid))
+          [(< phc (vector-ref *fringe-slice-bounds* mid))
            (get-slice-num phc low mid)]
           [else (get-slice-num phc mid hi)])))
 
@@ -137,8 +132,8 @@
 (define (make-vector-ranges vlength)
   (if (< vlength 10)
       (list (list 0 vlength))
-      (let ((start-list (build-list *n-expanders*
-                                    (lambda (i) (floor (* i (/ vlength *n-expanders*)))))))
+      (let ((start-list (build-list *num-fringe-slices*
+                                    (lambda (i) (floor (* i (/ vlength *num-fringe-slices*)))))))
         (foldr (lambda (x r) (cons (list x (first (first r))) r)) 
                (list (list (last start-list) vlength)) 
                (drop-right start-list 1)))))
@@ -175,10 +170,10 @@
          ; writing directly to NFS doesn't seem any slower than *local-store* and then copy -- that claim still needs verification
          ; write to one slice-ofile at a time, since everything is sorted
          [proto-slice-num 0]
-         [slice-upper-bound (vector-ref *proto-fringe-slice-bounds* (add1 proto-slice-num))]
+         [slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))]
          [proto-slice-ofile (open-output-file (string-append *share-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)))]
          [unique-expansions 0]
-         [slice-counts (make-vector *num-proto-fringe-slices* 0)]
+         [slice-counts (make-vector *num-fringe-slices* 0)]
          [sample-stats 
           (vector 0 ; number of positions preserved for further merging
                   0 ; number of positions discarded because duplicate with prev- or current-fringes
@@ -211,7 +206,7 @@
             (close-output-port proto-slice-ofile)
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile (open-output-file (string-append *share-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))))
-            (set! slice-upper-bound (vector-ref *proto-fringe-slice-bounds* (add1 proto-slice-num))))
+            (set! slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))))
           (write-bytes  (hc-position-bs efpos) proto-slice-ofile)
           (when (is-goal? efpos) (vector-set! sample-stats 4 (hc-position-bs efpos)))
           (vector-set! slice-counts proto-slice-num (add1 (vector-ref slice-counts proto-slice-num))))
@@ -222,11 +217,11 @@
     ;; close input and output ports
     (for ([fh (in-list (cons pffh (cons cffh lo-effh)))]) (close-input-port (fringehead-iprt fh)))
     (close-output-port proto-slice-ofile)
-    (for ([i (in-range (add1 proto-slice-num) *num-proto-fringe-slices*)])
+    (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
       (touch (string-append *share-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right))))
     ;; complete the sampling-stat
     (vector-set! sample-stats 0 (for/sum ([i (vector-ref sample-stats 3)]) i))
-    (vector-set! sample-stats 6 (for/vector ([i *num-proto-fringe-slices*]) 
+    (vector-set! sample-stats 6 (for/vector ([i *num-fringe-slices*]) 
                                   (file-size (format "~a~a-~a" *share-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right)))))
     ;; delete files that are no longer needed
     (for ([efspec (in-list lo-expand-fspec)]) (delete-file (filespec-fullpathname efspec)))
@@ -423,9 +418,9 @@
   ;;**** RETHINK THIS -- MAYBE FORCE THE WORKER TO GRAB THE SLICE IT NEEDS??????
   #|(when (string=? *master-name* "localhost")
     (for ([efs expand-files-specs]) (bring-local-partial-expansions efs)))|#
-  ;(printf "remote-merge: n-protof-slices=~a, and length expand-files-specs=~a~%" *num-proto-fringe-slices* (vector-length expand-files-specs))
+  ;(printf "remote-merge: n-protof-slices=~a, and length expand-files-specs=~a~%" *num-fringe-slices* (vector-length expand-files-specs))
   (let ([merge-results
-         (for/work ([i (in-range *num-proto-fringe-slices*)]
+         (for/work ([i (in-range *num-fringe-slices*)]
                     [expand-fspecs-slice (in-vector expand-files-specs)])
                    (when (> depth *max-depth*) (error 'distributed-expand-fringe "ran off end")) ;finesse Riot caching
                    (let* ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
@@ -463,7 +458,7 @@
                                      #:when (vector-ref ss 4))
                            (set! *found-goal* (vector-ref ss 4)))]
          ;; make filespecs for proto-fringe-dXX-NN slices the relevant data in the sampling-stats
-         [proto-fringe-fspecs (for/vector ([i (in-range *num-proto-fringe-slices*)]);; for each index to a slice...
+         [proto-fringe-fspecs (for/vector ([i (in-range *num-fringe-slices*)]);; for each index to a slice...
                                 ;; pull out the info from each sampling-stat
                                 (for/vector ([ss (in-list sampling-stats)]) 
                                   (make-filespec (string-append (vector-ref ss 5) "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right)) ;; fname
