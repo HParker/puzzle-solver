@@ -415,10 +415,10 @@
 ;; expand-files-specs (proto-fringe-specs) is vector of vector of filespecs, the top-level has one for each slice,
 ;; each one containing as many proto-fringes as expanders, all of which need to be merged
 (define (remote-merge expand-files-specs depth pf cf)
-  ;;**** RETHINK THIS -- MAYBE FORCE THE WORKER TO GRAB THE SLICE IT NEEDS??????
-  #|(when (string=? *master-name* "localhost")
-    (for ([efs expand-files-specs]) (bring-local-partial-expansions efs)))|#
-  ;(printf "remote-merge: n-protof-slices=~a, and length expand-files-specs=~a~%" *num-fringe-slices* (vector-length expand-files-specs))
+  ;; print the merging fringe work to be done
+  (printf "remote-merge: fringe-slice proto-sizes prior to merging at depth ~a: ~a~%" depth 
+          (for/list ([expand-fspecs-slice (in-vector expand-files-specs)])
+            (for/sum ([fspec expand-fspecs-slice]) (filespec-pcount fspec))))
   (let ([merge-results
          (for/work ([i (in-range *num-fringe-slices*)]
                     [expand-fspecs-slice (in-vector expand-files-specs)])
@@ -426,13 +426,14 @@
                    (let* ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
                           [merged-fname-and-resp-rng-size (distributed-merge-proto-fringe-slices expand-fspecs-slice depth ofile-name pf cf i)]
                           )
-             ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)
-             merged-fname-and-resp-rng-size))])
-    ;(printf "remote-merge: merged segment names and lengths ~a~%" merge-results)
-    #|(when (string=? *master-name* "localhost")
-      (for ([fs expand-files-specs])
-        (for ([f fs] #:unless (zero? (filespec-pcount f)))
-          (delete-file (string-append *local-store* (filespec-fname f))))))|#
+                     ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)
+                     merged-fname-and-resp-rng-size))])
+    ;; print the sizes of the merged fringe-slices
+    (printf "remote-merge: fringe-slice sizes after merging at depth ~a: ~a~%" depth (map second merge-results))
+    (printf "remote-merge: fringe-slice duplicate removal at depth ~a: ~a~%" depth
+            (for/list ([expand-fspecs-slice (in-vector expand-files-specs)]
+                       [reduced-slice-and-size merge-results])
+              (- (for/sum ([fspec expand-fspecs-slice]) (filespec-pcount fspec)) (second reduced-slice-and-size))))
     merge-results))
 
 
