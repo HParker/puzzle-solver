@@ -311,7 +311,7 @@
     (close-input-port (fringehead-iprt cffh))
     ;; PHASE 2: now pass through the proto-fringe expansion file(s) as well as prev-fringe and current-fringe to remove duplicates
     (remove-dupes pf cf pre-ofiles 
-                  (format "proto-fringe-d~a-~a" depth (~a process-id #:left-pad-string "0" #:width 2 #:align 'right)) ;; ofile-name
+                  (format "proto-fringe-d~a-~a" depth (~a process-id #:left-pad-string "0" #:width 3 #:align 'right)) ;; ofile-name
                   depth
                   dupes-caught-here sort-time write-time (- (current-milliseconds) expand-part-time))))
 
