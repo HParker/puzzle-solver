@@ -138,6 +138,10 @@
                (list (list (last start-list) vlength)) 
                (drop-right start-list 1)))))
 
+;; dynamic-slice-ranges: (listof filespec) -> (listof (list int int))
+;; for when changing from one number of slices at one level to another number of slices at the next level
+(define (dynamic-slice-ranges lofspec) empty)
+
 ;; simple-ranges: (listof filespec) -> (listof (list int int)
 ;; just use the fringe-segments
 (define (make-simple-ranges lofspec)
@@ -443,7 +447,9 @@
   (let* (;; EXPAND
          [start-expand (current-seconds)]
          ;[ranges (make-vector-ranges (fringe-pcount cf))]
-         [ranges (make-simple-ranges (fringe-segments cf))]
+         [ranges (if (= (length (fringe-segments cf)) *num-fringe-slices*)
+                     (make-simple-ranges (fringe-segments cf))
+                     (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
          [sampling-stats (remote-expand-fringe ranges pf cf depth)]
          [end-expand (current-seconds)]
