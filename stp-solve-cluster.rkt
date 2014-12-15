@@ -237,7 +237,7 @@
 ;; returning two values: the list with the new filespec added and the number of duplicates eliminated at this phase
 (define (dump-partial-expansion pcount ofile-template ofile-counter ofiles prev-dupes sort-time0 write-time0)
   (let* ([hc-to-scrub 'hcpos-to-scrub]
-         [f (format "~a~a" ofile-template ofile-counter)]
+         [f (format "~a-~a" ofile-template ofile-counter)]
          [fullpath (string-append *local-store* f)]
          [this-batch 0]
          [sort-time 0]
@@ -274,7 +274,7 @@
   ;(printf "remote-expand-part-fringe: starting with pf: ~a, and cf: ~a~%" pf cf)
   ;; EXPAND PHASE 1
   (let* ([expand-part-time (current-milliseconds)]
-         [pre-ofile-template-fname (format "partial-expansion~a" (~a process-id #:left-pad-string "0" #:width 2 #:align 'right))]
+         [pre-ofile-template-fname (format "partial-expansion~a" (~a process-id #:left-pad-string "0" #:width 3 #:align 'right))]
          [pre-ofile-counter 0]
          [pre-ofiles empty]
          ;; *** Dynamically choose the size of the pre-proto-fringes to keep the number of files below 500 ***
@@ -318,19 +318,12 @@
 
 ;; remote-expand-fringe: (listof (list fixnum fixnum)) fringe fringe int -> (listof sampling-stat)
 ;; trigger the distributed expansion according to the given ranges
-;; In theory, it shouldn't matter where the files pointed to by the fringe are located,
-;; but we expect they will point to a *local-store* copy of the current-fringe,
-;; where the copy is arranged-for by the master also
+;; In theory, it shouldn't matter where the files pointed to by the fringe are located.
 (define (remote-expand-fringe ranges pf cf depth)
   ;;(printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" cur-fringe-size (map (lambda (pr) (- (second pr) (first pr))) ranges))
   (let* ([distrib-results (for/work ([range-pair (in-list ranges)]
                                      [i (in-range (length ranges))])
                                     (when (> depth *max-depth*) (error 'distributed-expand-fringe "ran off end")) ;;prevent riot cache-failure
-                                    ;; need alternate version of wait-for-files that just checks on the assigned range
-                                    ;; but for now, just append the fspecs
-                                    #| push the wait into where we're trying to access positions 
-                                    (wait-for-files (append (map (lambda (seg) (segment-fspec seg)) pf-findex)
-                                                            (map (lambda (seg) (segment-fspec seg)) cf-findex)) #t)|#
                                     (remote-expand-part-fringe range-pair i pf cf depth)
                                     )])
     ;(printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
