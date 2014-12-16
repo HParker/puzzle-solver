@@ -57,7 +57,7 @@
               1)))
 
 ;(compile-ms-array! *piece-types* *bh* *bw*)
-(compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
+(compile-spaceindex (format "~a-spaceindex.rkt" *puzzle-name*))
 
 ;; canonicalize the *start* blank-configuration
 (let* ([spacelist (bwrep->list (intify (hc-position-bs *start*) 0 4))]
@@ -85,12 +85,12 @@
   ;; Switch between these according to if using the cluster or testing on multi-core single machine
   (connect-to-riot-server! *master-name*)
   (init-workers)
-  ;(define search-result (time (start-cluster-fringe-search *start*)))
-  ;#|
+  (define search-result (time (start-cluster-fringe-search *start*)))
+  #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d143-" 90 "/share/bigspace/CP24-save/")
                                         (make-fringe-from-files "fringe-segment-d144-" 90 "/share/bigspace/CP24-save/")
                                         145)))
-  ;|#
+  |#
   #|
   (define search-result (time (cfs-file (make-fringe-from-file "c12d59fringe" "fill-in-path-to-fringe-file")
                                         (make-fringe-from-file "c12d58fringe" "fill-in-path-to-fringe-file")

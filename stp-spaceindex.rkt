@@ -139,14 +139,18 @@
 ;; compile-spaceindex: string -> void
 ;; read or, if not present, initialize-and-write the *spaceindex* hashtable from or to the given file
 (define (compile-spaceindex fname)
-  (set! *spaceindex* 
-        (if (file-exists? fname)
-            (with-input-from-file fname read)
-            (let ([ht (make-hash)]) ; mutable hash-table of possible moves indexed by space configuration
-              (compile-ms-array! *piece-types* *bh* *bw*)
-              (all-space-config ht)
-              (with-output-to-file fname (lambda () (write ht)))
-              ht))))
+  (unless (hash? *spaceindex*)
+    (set! *spaceindex* 
+          (cond [(file-exists? (string-append "/state/partition1/stpconfigs/" fname))
+                 (with-input-from-file (string-append "/state/partition1/stpconfigs/" fname) read)]
+                [(file-exists? (string-append "stpconfigs/" fname))
+                 (with-input-from-file (string-append "stpconfigs/" fname) read)]
+                [else
+                 (let ([ht (make-hash)]) ; mutable hash-table of possible moves indexed by space configuration
+                   (compile-ms-array! *piece-types* *bh* *bw*)
+                   (all-space-config ht)
+                   (with-output-to-file fname (lambda () (write ht)))
+                   ht)]))))
 
 ;; all-space-config: (hash-table: spaceint (vectorof EBMS)) -> void
 ;; populates the hash of possible moves for indexed by all possible configurations of blanks
@@ -315,7 +319,7 @@
 
 ;(climbpro24-init)
 ;(time (compile-ms-array! *piece-types* *bh* *bw*))
-(time (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*)))
+(time (compile-spaceindex (format "~a-spaceindex.rkt" *puzzle-name*)))
 
 ;; canonicalize the *start* blank-configuration
 #|

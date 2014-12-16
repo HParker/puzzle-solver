@@ -43,7 +43,7 @@
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
 
-(define *worker-multiplier* 2)
+(define *worker-multiplier* 1)
 (define *num-fringe-slices* (* *n-processors* *worker-multiplier*))
 
 ;; define the fixed hash-code bounds to be used for repsonsibility ranges and proto-fringe slicing
@@ -447,7 +447,7 @@
   (let* (;; EXPAND
          [start-expand (current-seconds)]
          ;[ranges (make-vector-ranges (fringe-pcount cf))]
-         [ranges (if (= (length (fringe-segments cf)) *num-fringe-slices*)
+         [ranges (if (or #t (= (length (fringe-segments cf)) *num-fringe-slices*))
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
