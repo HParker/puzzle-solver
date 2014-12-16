@@ -30,8 +30,8 @@ This file is under version control.  Create a _copy_ named "configenv.rkt" to th
       For local n-core runs, set this #f.
 |#
 (define *late-duplicate-removal* #f)
-(define *preserve-prior-fringes* #f)
+(define *preserve-prior-fringes* #t)
 
 ;;--- Puzzle values ----------------
 (define *puzzle-name* "climb12") ;; one of climb12, climb15, climbpro24
-(define *max-depth* 60)
+(define *max-depth* 36)

@@ -92,6 +92,11 @@
                                         145)))
   |#
   #|
+  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d29-" 4 "fringefiles/")
+                                        (make-fringe-from-files "fringe-segment-d30-" 4 "fringefiles/")
+                                        31)))
+  |#
+  #|
   (define search-result (time (cfs-file (make-fringe-from-file "c12d59fringe" "fill-in-path-to-fringe-file")
                                         (make-fringe-from-file "c12d58fringe" "fill-in-path-to-fringe-file")
                                         1)))
