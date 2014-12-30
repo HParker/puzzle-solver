@@ -1,5 +1,6 @@
 # Sliding-Tile Puzzle Files
 fringefiles/fringe-segment*
+fringefiles/fringe-d*
 stpconfigs/*.rkt
 savefringes/
 

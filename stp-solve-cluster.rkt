@@ -391,9 +391,9 @@
                                          (filter-not (lambda (fh) (eof-object? (fringehead-next fh))) to-merge-fheads))
                           lheap)]
          [pmsg2-5 (printf "distmerge-debug2-5: made heap with ~a fheads'~%" (heap-count heap-o-fheads))]
-         [pffh (fh-from-fringe pf *****)]
+         [pffh (fh-from-fringe pf (first range))]
          [pmsg2-7 (printf "debug2-7: made the pffh okay~%")]
-         [cffh (fh-from-fringe cf (first range)]
+         [cffh (fh-from-fringe cf (first range))]
          [pmsg3 (printf "distmerge-debug3: made the heap with ~a frigeheads in it~%" (heap-count heap-o-fheads))]
          ;****** log duplicate eliminations here
          [segment-size (let ([last-pos (make-hcpos (bytes 49 49 49 49))]
