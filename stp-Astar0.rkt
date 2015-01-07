@@ -13,11 +13,9 @@
 (define *found-goal* #f)
 
 (define scores (make-hash))  ;; hash for (mcons g . f) pairs indexed by position
-(define closed-set (set)) ;; set of raw-position
-(define open-set (set)) ;; set of raw-position
+(define closed-set (mutable-set)) ;; set of raw-position
+(define open-set (mutable-set)) ;; set of raw-position
 (define open-list empty) ;; sorted by f-value
-(define open-list-new empty)
-(define pseudo-depth 0)
 (define local-positions-handled 0) ;; number of successors generated and checked for duplicate within given A* iteration
 (define total-positions-handled 0) ;; total number of successors ever generated
 
@@ -227,25 +225,19 @@
       (set! local-positions-handled 0)
       )
     (cond [(>= fdepth *max-depth*) (printf "exhausted the space~%") #f]
-          #|
-          [*found-goal* 
-           (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
-                   (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
-           *found-goal*]
-          |#
           [(and (empty? open-list) (empty? (vector-ref vools fdepth)))
            (a*-search (add1 fdepth))]
           [(is-goal? (hc-position 0 (first open-list)))
-           (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
-                   (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
-           (set! *found-goal* (first open-list))]
+           (set! *found-goal* (first open-list))
+           (printf "found goal ~s after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
+                   *found-goal* (g-score *found-goal*) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)]
           [else 
            (let* ([current (first open-list)]
                   ;; expand the first position in the open list
                   [successors (expand-a* current)])
-             (set! open-set (set-remove open-set current))
+             (set-remove! open-set current)
              (set! open-list (rest open-list))
-             (set! closed-set (set-add closed-set current))
+             (set-add! closed-set current)
              (set! local-positions-handled (+ (vector-length successors) local-positions-handled))
              ;; insert successors that are not found in closed into sorted open
              (for ([s successors])
@@ -267,7 +259,7 @@
                                        (cons s (vector-ref vools (fscore->voolindex tent-fscore)))))
                         (add-scores! s tent-gscore tent-fscore)
                         (unless (set-member? open-set s)
-                          (set! open-set (set-add open-set s))
+                          (set-add! open-set s)
                           (vector-set! vools (fscore->voolindex tent-fscore)
                                        (cons s (vector-ref vools (fscore->voolindex tent-fscore)))))])))
              (a*-search min-voolindex)
@@ -380,7 +372,7 @@
 
 ;; initialization
 (set! *target-cell* (loc-to-cell (- (cdr *target*) *charify-offset*)))
-(set! open-set (set-add open-set (hc-position-bs *start*)))
+(set-add! open-set (hc-position-bs *start*))
 (vector-set! vools (fscore->voolindex (heuristic (hc-position-bs *start*)))
              (list (hc-position-bs *start*)))
 (add-scores! (hc-position-bs *start*) 0 (+ 0 (heuristic (hc-position-bs *start*))))
