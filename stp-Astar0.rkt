@@ -227,12 +227,18 @@
       (set! local-positions-handled 0)
       )
     (cond [(>= fdepth *max-depth*) (printf "exhausted the space~%") #f]
-          [(and (empty? open-list) (empty? (vector-ref vools fdepth)))
-           (a*-search (add1 fdepth))]
+          #|
           [*found-goal* 
            (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
                    (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
            *found-goal*]
+          |#
+          [(and (empty? open-list) (empty? (vector-ref vools fdepth)))
+           (a*-search (add1 fdepth))]
+          [(is-goal? (hc-position 0 (first open-list)))
+           (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
+                   (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
+           (set! *found-goal* (first open-list))]
           [else 
            (let* ([current (first open-list)]
                   ;; expand the first position in the open list
@@ -281,9 +287,6 @@
   (let* ([num-expanded (expand* (hc-position -1 p) 0)]
          ;[ignore (printf "finished expand* and got ~a successors~%" num-expanded)]
          [res (for/vector ([i num-expanded])
-                          (when (is-goal? (vector-ref *expansion-space* i))
-                            (printf "found goal: ~s~%" (hc-position-bs (vector-ref *expansion-space* i)))
-                            (set! *found-goal* (vector-ref *expansion-space* i)))
                           (bytes-copy (hc-position-bs (vector-ref *expansion-space* i))))])
     ;(printf "finishing expand-a* after making the vector of raw positions from the expansion-space~%")
     res
