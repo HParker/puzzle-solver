@@ -149,7 +149,7 @@
                  (let ([ht (make-hash)]) ; mutable hash-table of possible moves indexed by space configuration
                    (compile-ms-array! *piece-types* *bh* *bw*)
                    (all-space-config ht)
-                   (with-output-to-file fname (lambda () (write ht)))
+                   (with-output-to-file (string-append "stpconfigs/" fname) (lambda () (write ht)))
                    ht)]))))
 
 ;; all-space-config: (hash-table: spaceint (vectorof EBMS)) -> void

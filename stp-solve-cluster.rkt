@@ -434,7 +434,7 @@
             (for/sum ([fspec expand-fspecs-slice]) (filespec-pcount fspec))))
   (let ([merge-results
          (for/work ([i (in-range *num-fringe-slices*)]
-                    [range ranges]
+                    [range ranges];*** on the first time, ther is only one range but multiple expand-files-specs***
                     [expand-fspecs-slice (in-vector expand-files-specs)])
                    (when (> depth *max-depth*) (error 'distributed-expand-fringe "ran off end")) ;finesse Riot caching
                    (let* ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
@@ -484,7 +484,11 @@
                                                  *share-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
-         [sorted-segment-fspecs (remote-merge ranges proto-fringe-fspecs depth pf cf)]
+         [sorted-segment-fspecs 
+          (remote-merge (if (= (length ranges) *num-fringe-slices*)
+                            ranges
+                            (make-list *num-fringe-slices* (car ranges)))
+                        proto-fringe-fspecs depth pf cf)]
          [merge-end (current-seconds)]
          ;; -------------------------------------------
          ;; delete previous fringe now that duplicates have been removed
@@ -494,7 +498,6 @@
                                      (delete-fringe pf *local-store*)))]
          [sorted-expansion-files (map first sorted-segment-fspecs)]
          [sef-lengths (map second sorted-segment-fspecs)]
-         [new-cf-name (format "fringe-d~a" depth)]
          )
     ;; create the _new_ current-fringe
     #|

@@ -87,9 +87,9 @@
   (init-workers)
   ;(define search-result (time (start-cluster-fringe-search *start*)))
   ;#|
-  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d143-" 90 "/share/bigspace/fringefiles/")
-                                        (make-fringe-from-files "fringe-segment-d144-" 90 "/share/bigspace/fringefiles/")
-                                        145)))
+  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d136-" 90 "/share/bigspace/fringefiles/")
+                                        (make-fringe-from-files "fringe-segment-d137-" 90 "/share/bigspace/fringefiles/")
+                                        138)))
   ;|#
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d29-" 4 "fringefiles/")
