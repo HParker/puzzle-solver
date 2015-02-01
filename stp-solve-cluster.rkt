@@ -34,7 +34,7 @@
        (set! *most-positive-fixnum* (fx+ (expt 2 61) (fx- (expt 2 61) 1)))  ;; ****** only on 64-bit architectures *****
        (set! *most-negative-fixnum* (fx+ (fx* -1 (expt 2 61)) (fx* -1 (expt 2 61))))];; ***** likewise *****
       [else 
-       ;; For the cluster platform use the following:
+       ;; For the 32-bit old-cluster platform use the following:
        (set! *most-positive-fixnum* (fx+ (expt 2 29) (fx- (expt 2 29) 1)))  ;; ****** only on our cluster, wcp *****
        (set! *most-negative-fixnum* (fx+ (fx* -1 (expt 2 29)) (fx* -1 (expt 2 29))))]);; ***** likewise *****
 
@@ -372,29 +372,31 @@
   ;(define (remote-merge-proto-fringes my-range expand-files-specs depth ofile-name)
   ;; expand-files-specs are of pattern: "proto-fringe-dXX-NN" for depth XX and proc-id NN, pointing to working (shared) directory 
   ;; ofile-name is of pattern: "fringe-segment-dX-NNN", where the X is the depth and the NN is a slice identifier
-  (printf "prev-fring: ~a~%curr-fringe: ~a~%" pf cf) 
-  (printf "distributed-merge-proto-fringe-slices: ")
-  (for ([fs slice-fspecs]) (printf "~a: ~a;  " (filespec-fname fs) (filespec-pcount fs))) (printf "~%")
-  
+  ;(printf "distributed-merge-proto-fringe-slices: which-slice given as ~a~%" which-slice)
+  ;(printf "prev-fring: ~a~%curr-fringe: ~a~%" pf cf) 
+  ;(printf "distributed-merge-proto-fringe-slices: ")
+  ;(for ([fs slice-fspecs]) (printf "~a: ~a;  " (filespec-fname fs) (filespec-pcount fs))) (printf "~%")
   (let* ([mrg-segment-oport (open-output-file (format "~a~a" *share-store* ofile-name) #:exists 'replace)] ; try writing directly to NFS
          ;[local-protofringe-fspecs (for/list ([fs slice-fspecs] #:unless (zero? (filespec-pcount fs))) (rebase-filespec fs *local-store*))]
          [local-protofringe-fspecs (for/list ([fs (in-vector slice-fspecs)] #:unless (zero? (filespec-pcount fs))) fs)]
-         [pmsg1 (printf "distmerge-debug1: ~a fspecs in ~a~%" (vector-length slice-fspecs) local-protofringe-fspecs)]
+         ;[pmsg1 (printf "distmerge-debug1: ~a fspecs in ~a~%" (vector-length slice-fspecs) local-protofringe-fspecs)]
          ;******
          ;****** move the fringehead creation inside the heap-o-fhead construction in order to avoid the short-lived list allocation *******
          [to-merge-fheads 
           (for/list ([exp-fspec (in-list local-protofringe-fspecs)])
             (fh-from-filespec exp-fspec))]
-         [pmsg2 (printf "distmerge-debug2: made 'to-merge-fheads' having ~a fringeheads~%" (length to-merge-fheads))]
+         ;[pmsg2 (printf "distmerge-debug2: made 'to-merge-fheads' having ~a fringeheads~%" (length to-merge-fheads))]
          [heap-o-fheads (let ([lheap (make-heap (lambda (fh1 fh2) (hcposition<? (fringehead-next fh1) (fringehead-next fh2))))])
                           (heap-add-all! lheap 
                                          (filter-not (lambda (fh) (eof-object? (fringehead-next fh))) to-merge-fheads))
                           lheap)]
-         [pmsg2-5 (printf "distmerge-debug2-5: made heap with ~a fheads'~%" (heap-count heap-o-fheads))]
-         [pffh (fh-from-fringe pf (first range))]
-         [pmsg2-7 (printf "debug2-7: made the pffh okay~%")]
+         ;[pmsg2-5 (printf "distmerge-debug2-5: made heap with ~a fheads'~%" (heap-count heap-o-fheads))]
+         [pffh (fh-from-fringe pf (if (= (length (fringe-segments pf)) 1) 0
+                                      (for/sum ([i which-slice]
+                                                [fspec (fringe-segments pf)]) (filespec-pcount fspec))))]
+         ;[pmsg2-7 (printf "debug2-7: made the pffh okay~%")]
          [cffh (fh-from-fringe cf (first range))]
-         [pmsg3 (printf "distmerge-debug3: made the heap with ~a frigeheads in it~%" (heap-count heap-o-fheads))]
+         ;[pmsg3 (printf "distmerge-debug3: made the heap with ~a frigeheads in it~%" (heap-count heap-o-fheads))]
          ;****** log duplicate eliminations here
          [segment-size (let ([last-pos (make-hcpos (bytes 49 49 49 49))]
                              [keep-pos (void)]
@@ -428,13 +430,15 @@
 ;; expand-files-specs (proto-fringe-specs) is vector of vector of filespecs, the top-level has one for each slice,
 ;; each one containing as many proto-fringes as expanders, all of which need to be merged
 (define (remote-merge ranges expand-files-specs depth pf cf)
+  (unless (= (length ranges) (vector-length expand-files-specs) *num-fringe-slices*)
+    (error 'remote-merge "mis-match between ranges, expand-files-specs, and/or *num-fringe-slices*"))
   ;; print the merging fringe work to be done
   (printf "remote-merge: fringe-slice proto-sizes prior to merging at depth ~a: ~a~%" depth 
           (for/list ([expand-fspecs-slice (in-vector expand-files-specs)])
             (for/sum ([fspec expand-fspecs-slice]) (filespec-pcount fspec))))
   (let ([merge-results
          (for/work ([i (in-range *num-fringe-slices*)]
-                    [range ranges];*** on the first time, ther is only one range but multiple expand-files-specs***
+                    [range ranges]
                     [expand-fspecs-slice (in-vector expand-files-specs)])
                    (when (> depth *max-depth*) (error 'distributed-expand-fringe "ran off end")) ;finesse Riot caching
                    (let* ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
