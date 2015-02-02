@@ -4,21 +4,21 @@
 ;(require (planet soegaard/gzip:2:2))
 ;(require file/gzip)
 ;(require file/gunzip)
-;(require rnrs/sorting-6)
 (require racket/list
          racket/format
          racket/vector
+         racket/fixnum
+         racket/set
+         data/heap
+         rnrs/sorting-6
          )
-(require data/heap)
-(require racket/fixnum)
-(require racket/set)
 
 (require "stpconfigs/configenv.rkt"
          "stp-init.rkt"
          "stp-solve-base.rkt"
          "stp-fringefilerep.rkt"
          "stp-spaceindex.rkt"
-         "myvectorsort.rkt"
+         ;"myvectorsort.rkt" ;; use rnrs/sorting-6 which seems to be almost 3 times faster
          )
 ;(require profile)
 ;(instrumenting-enabled #t)
