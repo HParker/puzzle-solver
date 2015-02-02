@@ -3,11 +3,14 @@
 (require srfi/25 ;; multi-dimensional arrays
          racket/list
          racket/set
+         racket/fixnum
          )
 
 (require "stpconfigs/configenv.rkt")
 
-(provide EXPAND-SPACE-SIZE
+(provide *most-positive-fixnum*
+         *most-negative-fixnum*
+         EXPAND-SPACE-SIZE
          (struct-out hc-position)
          make-hcpos
          *prim-move-translations* 
@@ -38,6 +41,18 @@
          climb12-init
          climb15-init
          climbpro24-init)
+
+
+(define *most-positive-fixnum* 0)
+(define *most-negative-fixnum* 0)
+(cond [(fixnum? (expt 2 61))
+       (set! *most-positive-fixnum* (fx+ (expt 2 61) (fx- (expt 2 61) 1)))  ;; ****** only on 64-bit architectures *****
+       (set! *most-negative-fixnum* (fx+ (fx* -1 (expt 2 61)) (fx* -1 (expt 2 61))))];; ***** likewise *****
+      [else 
+       ;; For the 32-bit old-cluster platform use the following:
+       (set! *most-positive-fixnum* (fx+ (expt 2 29) (fx- (expt 2 29) 1)))  ;; ****** only on our old cluster, wcp *****
+       (set! *most-negative-fixnum* (fx+ (fx* -1 (expt 2 29)) (fx* -1 (expt 2 29))))]);; ***** likewise *****
+
 
 
 ;; ******************************************************************************

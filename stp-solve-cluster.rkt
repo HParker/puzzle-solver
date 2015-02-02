@@ -7,7 +7,7 @@
 (require racket/list
          racket/format
          racket/vector
-         racket/fixnum
+         ;racket/fixnum
          racket/set
          data/heap
          rnrs/sorting-6
@@ -28,15 +28,6 @@
          expand-fringe-self
          distributed-expand-fringe)
 
-(define *most-positive-fixnum* 0)
-(define *most-negative-fixnum* 0)
-(cond [(fixnum? (expt 2 61))
-       (set! *most-positive-fixnum* (fx+ (expt 2 61) (fx- (expt 2 61) 1)))  ;; ****** only on 64-bit architectures *****
-       (set! *most-negative-fixnum* (fx+ (fx* -1 (expt 2 61)) (fx* -1 (expt 2 61))))];; ***** likewise *****
-      [else 
-       ;; For the 32-bit old-cluster platform use the following:
-       (set! *most-positive-fixnum* (fx+ (expt 2 29) (fx- (expt 2 29) 1)))  ;; ****** only on our cluster, wcp *****
-       (set! *most-negative-fixnum* (fx+ (fx* -1 (expt 2 29)) (fx* -1 (expt 2 29))))]);; ***** likewise *****
 
 (define *found-goal* #f)
 
@@ -47,13 +38,7 @@
 (define *num-fringe-slices* (* *n-processors* *worker-multiplier*))
 
 ;; define the fixed hash-code bounds to be used for repsonsibility ranges and proto-fringe slicing
-(define *fringe-slice-bounds*
-  (let* ([slice-width (floor (/ (- *most-positive-fixnum* *most-negative-fixnum*) *num-fringe-slices*))]
-         [slices (for/vector #:length (add1 *num-fringe-slices*)
-                   ([i *num-fringe-slices*])
-                   (+ *most-negative-fixnum* (* i slice-width)))])
-    (vector-set! slices *num-fringe-slices* (add1 *most-positive-fixnum*))
-    slices))
+(define *fringe-slice-bounds* (compute-segment-bounds *num-fringe-slices*))
 
 ;; get-slice-num: fixnum [low number] [hi number] -> number
 ;; use binary search to find index for given hash-code within ranges defined by *fringe-slice-bounds*
@@ -177,8 +162,8 @@
   #|(printf "EXPAND PHASE 2 (REMOVE DUPLICATES) pf: ~a~%cf: ~a~%all of lo-expand-fspec: ~a~%ofile-name: ~a~%depth: ~a~%"
           pf cf lo-expand-fspec ofile-name depth);|#
   ;; EXPAND PHASE 2 (REMOVE DUPLICATES)
-  (let* ([pffh (fh-from-fringe pf)]
-         [cffh (fh-from-fringe cf)]
+  (let* ([pffh (and (not *late-duplicate-removal*) (fh-from-fringe pf))]
+         [cffh (and (not *late-duplicate-removal*) (fh-from-fringe cf))]
          [n-pos-to-process (for/sum ([an-fspec (in-list lo-expand-fspec)]) (filespec-pcount an-fspec))]
          [lo-effh (for/list ([an-fspec (in-list lo-expand-fspec)]) (fh-from-filespec an-fspec))]
          [heap-o-fheads (let ([lheap (make-heap (lambda (fh1 fh2) (hcposition<? (fringehead-next fh1) (fringehead-next fh2))))])
@@ -236,7 +221,8 @@
           (heap-add! heap-o-fheads an-fhead))))
     ;(printf "remote-expand-part-fringe: HAVE EXPANSIONS:~%")
     ;; close input and output ports
-    (for ([fh (in-list (cons pffh (cons cffh lo-effh)))]) (close-input-port (fringehead-iprt fh)))
+    (for ([fh (in-list (if *late-duplicate-removal* lo-effh (cons pffh (cons cffh lo-effh))))])
+      (close-input-port (fringehead-iprt fh)))
     (close-output-port proto-slice-ofile)
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
       (touch (string-append *share-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right))))

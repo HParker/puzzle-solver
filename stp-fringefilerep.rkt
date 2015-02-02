@@ -229,6 +229,43 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                    (rebase-filespec fspec target)))
                (fringe-pcount f)))
                  
+;; resegment-fringe: fringe number -> fringe
+;; given a fringe, redistribute it over the given number of segments
+(define (resegment-fringe f n)
+  (let* (;; determine new segment boundaries based on n
+         (new-slice-bounds (compute-segment-bounds n))
+         ;; create the fringehead for the given fringe
+         (fh (fh-from-fringe f))
+         ;; go through each position and switch output files when needed
+         (something
+          (do ([pos (advance-fhead! fh)])
+            ('test)))
+         #|
+         (new-segs (for/list ([])
+                    (do ([efpos-hc (hc-position-hc efpos)])
+                      ;; if efpos-hc is >= to the slice-upper-bound, advance the proto-slice-num/ofile/upper-bound until it is not
+                      ((< efpos-hc slice-upper-bound))
+                      (close-output-port proto-slice-ofile)
+                      (set! proto-slice-num (add1 proto-slice-num))
+                      (set! proto-slice-ofile
+                            (open-output-file (string-append *share-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)) 
+                                              #:exists 'replace))
+                      (set! slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))))))
+          |#
+         ;; package the new fringe when done and return the fringe structure
+         )
+    'new-fringe))
+
+;; compute-segment-bounds: number -> (vectorof number)
+;; determine the segment bounds for the given number of slices
+(define (compute-segment-bounds n)
+  (let* ([slice-width (floor (/ (- *most-positive-fixnum* *most-negative-fixnum*) n))]
+         [slices (for/vector #:length (add1 n)
+                   ([i n])
+                   (+ *most-negative-fixnum* (* i slice-width)))])
+    (vector-set! slices n (add1 *most-positive-fixnum*))
+    slices))
+
 
 ;; delete-fringe: fringe -> void
 ;; remove all the files that make up the given fringe
