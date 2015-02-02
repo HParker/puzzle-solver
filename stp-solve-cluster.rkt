@@ -264,16 +264,16 @@
          [sort-time 0]
          [write-time 0])
     ;; scrub the last part of the vector with bogus positions
-    #|
+    ;#|
     (for ([i (in-range pcount (vector-length *expansion-space*))])
       (set! hc-to-scrub (vector-ref *expansion-space* i))
       (set-hc-position-hc! hc-to-scrub *most-positive-fixnum*)    ;; make vector-sort! put these at the very end, but if a positions has *most-positive-fixnum* ...
       (bytes-copy! (hc-position-bs hc-to-scrub) 0 #"~~IgnoreMe")) ;; #\~ (ASCII character 126) is greater than any of our positions
-    |#
+    ;|#
     ;; sort the vector
     (set! sort-time (current-milliseconds))
-    ;(vector-sort! hcposition<? *expansion-space*)
-    (vector-sort! *expansion-space* hcposition<? 0 pcount)
+    (vector-sort! hcposition<? *expansion-space*)
+    ;(vector-sort! *expansion-space* hcposition<? 0 pcount)
     (set! sort-time (- (current-milliseconds) sort-time))
     ;; write the first pcount positions to the file
     (set! write-time (current-milliseconds))
