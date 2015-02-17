@@ -229,32 +229,47 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                    (rebase-filespec fspec target)))
                (fringe-pcount f)))
                  
-;; resegment-fringe: fringe number -> fringe
+;; resegment-fringe: fringe number string -> symbol
 ;; given a fringe, redistribute it over the given number of segments
-(define (resegment-fringe f n)
-  (let* (;; determine new segment boundaries based on n
+;; CURRENTLY only a utility function that can be used prior to initiating a run
+(define (resegment-fringe f n [new-fringe-folder-name "newfringe/"])
+  (unless (directory-exists? (string-append *share-store* new-fringe-folder-name))
+    (make-directory (string-append *share-store* new-fringe-folder-name)))
+  (let* (;; current segment boundaries
+         (current-slice-bounds (compute-segment-bounds (length (fringe-segments f))))
+         ;; determine new segment boundaries based on n
          (new-slice-bounds (compute-segment-bounds n))
          ;; create the fringehead for the given fringe
          (fh (fh-from-fringe f))
-         ;; go through each position and switch output files when needed
-         (something
-          (do ([pos (advance-fhead! fh)])
-            ('test)))
-         #|
-         (new-segs (for/list ([])
-                    (do ([efpos-hc (hc-position-hc efpos)])
-                      ;; if efpos-hc is >= to the slice-upper-bound, advance the proto-slice-num/ofile/upper-bound until it is not
-                      ((< efpos-hc slice-upper-bound))
-                      (close-output-port proto-slice-ofile)
-                      (set! proto-slice-num (add1 proto-slice-num))
-                      (set! proto-slice-ofile
-                            (open-output-file (string-append *share-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)) 
-                                              #:exists 'replace))
-                      (set! slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))))))
-          |#
-         ;; package the new fringe when done and return the fringe structure
+         ;; segment-base-name
+         (seg-base (substring (filespec-fname (car (fringe-segments f)))
+                              0 (- (string-length (filespec-fname (car (fringe-segments f)))) 3)))
+         ;; vector of file-names (eventual filespecs) for creating the new fringe
+         (fnames (make-vector n))
          )
-    'new-fringe))
+    ;; go through each position and switch output files when needed
+    (do ([i 0] ;; output-segment currently written
+         [fsout (open-output-file (string-append *share-store* new-fringe-folder-name seg-base (~a 0 #:left-pad-string "0" #:width 3 #:align 'right))
+                                  #:exists 'replace)] ;; current output-port
+         [fspecs null] ;; build the list of filespecs
+         [pos (fringehead-next fh) (advance-fhead! fh)])
+      ((fhdone? fh) 
+       (close-output-port fsout)
+       (vector-set! fnames i (string-append new-fringe-folder-name seg-base (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
+       fnames)
+      (when (>= (hc-position-hc pos) (vector-ref new-slice-bounds (add1 i)))
+        ;; close current output
+        (close-output-port fsout)
+        ;; create filespec
+        (vector-set! fnames i (string-append new-fringe-folder-name seg-base (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
+        ;; advance counter
+        (set! i (add1 i))
+        ;; open next output
+        (set! fsout (open-output-file (string-append *share-store* new-fringe-folder-name seg-base (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+                                      #:exists 'replace))
+        )
+      (write-bytes (hc-position-bs pos) fsout)
+      )))
 
 ;; compute-segment-bounds: number -> (vectorof number)
 ;; determine the segment bounds for the given number of slices
