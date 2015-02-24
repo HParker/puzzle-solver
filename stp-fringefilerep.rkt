@@ -154,6 +154,19 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; -----------------------------------------------------------------------------------
 ;; --- BULK FRINGE READING/WRITING ---------------------------------------------------
 
+;; bs->compressed-bs: bytes -> bytes
+;; compress the given bytes
+
+;; write-pos: bytes output-port -> number
+;; write the given bytestring to the output port after compressing, returning number of bytes written
+(define (write-pos bs oprt)
+  (write-bytes (bs->compressed-bs bs) oprt))
+
+;; read-pos: input-port -> hc-position
+;; read the proper number of bytes from the input-port and convert to hc-position
+(define (read-compressed-bs->bs iprt)
+  (read-bytes iprt (ceiling (/ *num-pieces* 2))))
+
 ;; write-fringe-to-disk: (listof or vectorof hc-position) string -> int
 ;; writes the bytestring portions of the hc-positions from the given fringe (whether list or vector) into a file with given file-name.
 ;; return the number written, not counting duplicates if remove-dupes is non-false
@@ -201,7 +214,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; read-bs->hcpos: input-port [number] -> hc-position
 ;; read a bytestring from the given input-port and create hc-position
 (define (read-bs->hcpos in [num-bytes *num-pieces*])
-  (let ([bspos (read-bytes num-bytes in)])
+  (let ([bspos (read-compressed-bs->bs in)]) ;(read-bytes num-bytes in)]
     (if (eof-object? bspos) bspos (make-hcpos bspos))))
 
 ;; fringe-exists?: fringe -> boolean
