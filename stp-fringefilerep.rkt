@@ -155,7 +155,9 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; --- BULK FRINGE READING/WRITING ---------------------------------------------------
 
 ;; bs->compressed-bs: bytes -> bytes
-;; compress the given bytes
+;; compress the given bytes -- currently just a stub
+(define (bs->compressed-bs bs)
+  bs)
 
 ;; write-pos: bytes output-port -> number
 ;; write the given bytestring to the output port after compressing, returning number of bytes written
