@@ -1,5 +1,9 @@
 #lang racket/base
 
+#| TO DO
+- change 'replace to multi-way-merge in flush-buffer
+|#
+
 (require racket/list
          racket/set
          ;racket/math
@@ -16,11 +20,9 @@
 (define *found-goal* #f)
 
 (define scores (make-hash))  ;; hash for (mcons g . f) pairs indexed by position
-(define closed-set (set)) ;; set of raw-position
-(define open-set (set)) ;; set of raw-position
+(define closed-set (mutable-set)) ;; set of raw-position
+(define open-set (mutable-set)) ;; set of raw-position
 (define open-list empty) ;; sorted by f-value
-(define open-list-new empty)
-(define pseudo-depth 0)
 (define local-positions-handled 0) ;; number of successors generated and checked for duplicate within given A* iteration
 (define total-positions-handled 0) ;; total number of successors ever generated
 
@@ -73,6 +75,8 @@
 (define (get-f-val p) (bytes-ref p 0))
 ;; get-g-val: a*pos -> byte
 (define (get-g-val p) (- (get-f-val p) (heuristic (subbytes p 1))))
+;; get-raw-pos: a*pos -> bytes
+(define (get-raw-pos p) (subbytes p 1))
 ;; make-a*pos: number(0-255) byte-string -> byte-string
 (define (make-a*pos f bs) (bytes-append (bytes f) bs))
 
@@ -87,7 +91,7 @@
 ;; our f-values should be less than 255 and may therefore fit in one byte
 
 ;; fake-buffer: vector of bytestrings for output
-(define fb-capacity 2000000)
+(define fb-capacity 8000000)
 (define fakebuffer (make-vector (+ fb-capacity 200) (make-bytes (add1 *num-pieces*))))
 (define fb-ptr 0)
 
@@ -102,16 +106,24 @@
 ;; flush-fb:  -> void
 ;; write fakebuffer to file but remove duplicates -- preserving the position with lowest g value
 (define (flush-fb [ofile "tobemerged"])
-  (let ([last-pos #"noneseenyet"]
-        [actually-written 0])
+  (let ([last-pos #f]
+        [actually-written 0]
+        [bytes-to-read (add1 *num-pieces*)])
     (printf "flushing fakebuffer with ~a positions~%" fb-ptr)
     (with-output-to-file ofile
       (lambda ()
         (for ([n fb-ptr]
-              [p fakebuffer]
-              #:unless (bytes=? (subbytes p 1) last-pos))
-          (write-bs->file p (current-output-port) (add1 *num-pieces*))
-          (set! actually-written (add1 actually-written))))
+              [p fakebuffer])
+          (cond [(not last-pos) (set! last-pos p)]
+                [(bytes=? (subbytes p 1) (subbytes last-pos 1))
+                 ;; want the one with the lowest f-value
+                 (set! last-pos (make-a*pos (min (get-f-val last-pos) (get-f-val p)) (subbytes last-pos 1)))]
+                [else
+                 (write-bs->file last-pos (current-output-port) bytes-to-read)
+                 (set! actually-written (add1 actually-written))
+                 (set! last-pos p)]))
+        (write-bs->file last-pos (current-output-port) bytes-to-read)
+        (set! actually-written (add1 actually-written)))
       #:exists 'replace)
     (set! fb-ptr 0)
     (printf "........ wrote ~a non-duplicate positions~%" actually-written)))
@@ -136,26 +148,27 @@
 (define (merge-two-files f1 f2 [ofile "newastarnodelist"])
   (let ([i1 (open-input-file f1)]
         [i2 (open-input-file f2)]
-        [last #"nonprevious"])
+        [last #"nonprevious"]
+        [bytes-to-read (add1 *num-pieces*)])
     (with-output-to-file ofile
       (lambda ()
-        (let mrg ([p1 (read-bytes (add1 *num-pieces*) i1)]
-                  [p2 (read-bytes (add1 *num-pieces*) i2)]
+        (let mrg ([p1 (read-bytes bytes-to-read i1)]
+                  [p2 (read-bytes bytes-to-read i2)]
                   [last-written last])
           (cond [(and (eof-object? p1) (eof-object? p2)) void]
-                [(eof-object? p1) (write-bs->file p2 (current-output-port) (add1 *num-pieces*))
-                                  (mrg p1 (read-bytes (add1 *num-pieces*) i2) p2)]
-                [(eof-object? p2) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                  (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
-                [(bytes=? (subbytes p1 1) (subbytes last-written 1)) (mrg (read-bytes (add1 *num-pieces*) i1) p2 last-written)]
-                [(bytes=? (subbytes p2 1) (subbytes last-written 1)) (mrg p1 (read-bytes (add1 *num-pieces*) i2) last-written)]
-                [(bytes<? (subbytes p1 1) (subbytes p2 1)) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                                           (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
+                [(eof-object? p1) (write-bs->file p2 (current-output-port) bytes-to-read)
+                                  (mrg p1 (read-bytes bytes-to-read i2) p2)]
+                [(eof-object? p2) (write-bs->file p1 (current-output-port) bytes-to-read)
+                                  (mrg (read-bytes bytes-to-read i1) p2 p1)]
+                [(bytes=? (subbytes p1 1) (subbytes last-written 1)) (mrg (read-bytes bytes-to-read i1) p2 last-written)]
+                [(bytes=? (subbytes p2 1) (subbytes last-written 1)) (mrg p1 (read-bytes bytes-to-read i2) last-written)]
+                [(bytes<? (subbytes p1 1) (subbytes p2 1)) (write-bs->file p1 (current-output-port) bytes-to-read)
+                                                           (mrg (read-bytes bytes-to-read i1) p2 p1)]
                 [(and (bytes=? (subbytes p1 1) (subbytes p2 1))
-                      (< (bytes-ref p1 0) (bytes-ref p2 0))) (write-bs->file p1 (current-output-port) (add1 *num-pieces*))
-                                                             (mrg (read-bytes (add1 *num-pieces*) i1) p2 p1)]
-                [else (write-bs->file p2 (current-output-port) (add1 *num-pieces*))
-                      (mrg p1 (read-bytes (add1 *num-pieces*) i2) p2)]
+                      (< (bytes-ref p1 0) (bytes-ref p2 0))) (write-bs->file p1 (current-output-port) bytes-to-read)
+                                                             (mrg (read-bytes bytes-to-read i1) p2 p1)]
+                [else (write-bs->file p2 (current-output-port) bytes-to-read)
+                      (mrg p1 (read-bytes bytes-to-read i2) p2)]
                 )))
       #:exists 'replace)
     (close-input-port i1)
@@ -176,46 +189,53 @@
   (printf "A*-file-search: best-f-depth=~a~%" best-f)
   (let ([iport (open-input-file file-name)]
         [num-read 0])
-    (for ([a*p (in-port (lambda (i) (read-bytes (add1 *num-pieces*) i)) iport)])
-      (set! num-read (add1 num-read))
-      (when (= (get-f-val a*p) best-f)
-        (process-position a*p best-f)))
-    (write-fb-to-file)
-    ;; merge duplicates, etc.
+    (for ([a*p (in-port (lambda (i) (read-bytes (add1 *num-pieces*) i)) iport)]
+          #:break *found-goal*)
+      (cond [(is-goal? (hc-position 0 (get-raw-pos a*p)))
+             (set! *found-goal* a*p)
+             (printf "found goal ~s at depth ~a moves~%"
+                     *found-goal* (get-g-val *found-goal*))]
+            [else
+             (set! num-read (add1 num-read))
+             (when (= (get-f-val a*p) best-f)
+               (process-position a*p best-f))]))
     (close-input-port iport)
-    (cond [*found-goal*
-           (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
-                   (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
-           *found-goal*]
-          [else 
-           (merge-two-files "astarnodelist" "tobemerged")
-           (rename-file-or-directory "newastarnodelist" file-name #t)
-           (printf "... finished pass reading ~a positions from file~%" num-read)
-           (a*-file-search file-name (add1 best-f))])
+    ;; merge duplicates, etc.
+    (unless *found-goal*
+      (write-fb-to-file)
+      (merge-two-files "astarnodelist" "tobemerged")
+      (rename-file-or-directory "newastarnodelist" file-name #t)
+      (printf "... finished pass reading ~a positions from file~%" num-read)
+      (a*-file-search file-name (add1 best-f)))
     ))
 
 ;; process-position: a*pos number  -> 
 ;; expand and do whatever is appropriate for each successor
-(define (process-position a*p best-f)
+(define (process-position a*p best-f [posset (mutable-set)])
   (let* ([parent-f-val (get-f-val a*p)]
          [parent-pos (subbytes a*p 1)]
          [parent-g-val (- parent-f-val (heuristic parent-pos))])
-    (for ([s (expand-a* parent-pos)])
+    (set-add! posset parent-pos)
+    (for ([s (expand-a* parent-pos)]
+          #:unless (set-member? posset s))
       (let* ([s-h (heuristic s)]
              [s-f (+ s-h parent-g-val 1)]
              [a*s (make-a*pos s-f s)])
+        (set-add! posset s)
         (write-to-fb a*s) 
         (when (fb-full?) (write-fb-to-file))
         (when (<= s-f best-f)
-          ;(printf "process-position: filling in expansion for f-value (~a) better than best-f (~a)~%" s-f best-f)
-          (process-position a*s best-f))))))
+          #|(printf "process-position ~s: filling in expansion for f-value (~a + ~a) better than parent (~a + ~a) with best-f (~a)~%"
+                  s (- s-f s-h) s-h parent-g-val (- parent-f-val parent-g-val) best-f)
+          |#
+          (process-position a*s best-f posset))))))
 
 
 ;;--------------------------------------------------------------
 
 ;; a*-search:  int -> #f or position
 ;; A* search in memory in order to estimate savings of heuristics
-;; fdepth is an actual literal index into the vools vector of open-lists -- only fscores need to be translated
+;; fdepth is an actual literal index into the vools Vector Of Open-Lists -- only fscores need to be translated
 ;; via fscore->voolindex
 (define (a*-search fdepth) 
   (let ([min-voolindex fdepth])
@@ -230,17 +250,17 @@
     (cond [(>= fdepth *max-depth*) (printf "exhausted the space~%") #f]
           [(and (empty? open-list) (empty? (vector-ref vools fdepth)))
            (a*-search (add1 fdepth))]
-          [*found-goal* 
-           (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
-                   (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
-           *found-goal*]
+          [(is-goal? (hc-position 0 (first open-list)))
+           (set! *found-goal* (first open-list))
+           (printf "found goal ~s after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
+                   *found-goal* (g-score *found-goal*) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)]
           [else 
            (let* ([current (first open-list)]
                   ;; expand the first position in the open list
                   [successors (expand-a* current)])
-             (set! open-set (set-remove open-set current))
+             (set-remove! open-set current)
              (set! open-list (rest open-list))
-             (set! closed-set (set-add closed-set current))
+             (set-add! closed-set current)
              (set! local-positions-handled (+ (vector-length successors) local-positions-handled))
              ;; insert successors that are not found in closed into sorted open
              (for ([s successors])
@@ -262,7 +282,7 @@
                                        (cons s (vector-ref vools (fscore->voolindex tent-fscore)))))
                         (add-scores! s tent-gscore tent-fscore)
                         (unless (set-member? open-set s)
-                          (set! open-set (set-add open-set s))
+                          (set-add! open-set s)
                           (vector-set! vools (fscore->voolindex tent-fscore)
                                        (cons s (vector-ref vools (fscore->voolindex tent-fscore)))))])))
              (a*-search min-voolindex)
@@ -282,9 +302,6 @@
   (let* ([num-expanded (expand* (hc-position -1 p) 0)]
          ;[ignore (printf "finished expand* and got ~a successors~%" num-expanded)]
          [res (for/vector ([i num-expanded])
-                          (when (is-goal? (vector-ref *expansion-space* i))
-                            (printf "found goal: ~s~%" (hc-position-bs (vector-ref *expansion-space* i)))
-                            (set! *found-goal* (vector-ref *expansion-space* i)))
                           (bytes-copy (hc-position-bs (vector-ref *expansion-space* i))))])
     ;(printf "finishing expand-a* after making the vector of raw positions from the expansion-space~%")
     res
@@ -341,7 +358,10 @@
          [half-c-diff (/ c-diff 2)]
          [mmd (+ half-c-diff r-diff)]
          )
-    (+ mmd (floor ((lambda (x) (* x x)) (sub1 (max 1 mmd)))))))
+    ;(floor (+ mmd (sqr (sub1 (max 1 mmd)))))
+    (floor mmd)
+    ))
+
 
 (define (c15-heuristic p)
   (let* ([pt1-loc (- (bytes-ref p 4) *charify-offset*)]
@@ -356,6 +376,11 @@
 
 
 ;;--- HEURISTICS ------------------------------------------------------
+
+;(block10-init)
+;(climb12-init)
+;(climb15-init)
+;(climbpro24-init)
 
 (compile-spaceindex (format "~a~a-spaceindex.rkt" "stpconfigs/" *puzzle-name*))
 
@@ -374,7 +399,7 @@
 
 ;; initialization
 (set! *target-cell* (loc-to-cell (- (cdr *target*) *charify-offset*)))
-(set! open-set (set-add open-set (hc-position-bs *start*)))
+(set-add! open-set (hc-position-bs *start*))
 (vector-set! vools (fscore->voolindex (heuristic (hc-position-bs *start*)))
              (list (hc-position-bs *start*)))
 (add-scores! (hc-position-bs *start*) 0 (+ 0 (heuristic (hc-position-bs *start*))))

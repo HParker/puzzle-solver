@@ -211,7 +211,8 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; writes the bs to the ofile and checks to make sure the optionally-specified number of bytes were written
 (define (write-bs->file bspos [oprt (current-output-port)] [num-bytes *num-pieces*])
   (unless (= (write-bytes bspos oprt) num-bytes)
-    (error "write-bs->file: failed to write an exact position")))
+    (error (string-append "write-bs->file: failed to write an exact position: "
+                          (bytes->string/utf-8 (if (= num-bytes *num-pieces*) bspos (subbytes bspos 1)))))))
 
 ;; read-bs->hcpos: input-port [number] -> hc-position
 ;; read a bytestring from the given input-port and create hc-position
