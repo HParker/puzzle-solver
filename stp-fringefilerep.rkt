@@ -167,7 +167,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; read-pos: input-port -> hc-position
 ;; read the proper number of bytes from the input-port and convert to hc-position
 (define (read-compressed-bs->bs iprt)
-  (read-bytes iprt (ceiling (/ *num-pieces* 2))))
+  (read-bytes *num-pieces* iprt))
 
 ;; write-fringe-to-disk: (listof or vectorof hc-position) string -> int
 ;; writes the bytestring portions of the hc-positions from the given fringe (whether list or vector) into a file with given file-name.
