@@ -48,8 +48,8 @@
   ;; initialization of fringe files
   (let ([d-1 (format "~afringe-d-1" *share-store*)]
         [d0 (format "~afringe-d0" *share-store*)])
-    (for ([f (directory-list *share-store*)] #:unless (char=? #\. (string-ref (path->string f) 0))) 
-      (delete-file (build-path *share-store* f))) ; actually should use pattern match to delete only fringe* or proto*
+    (for ([f (directory-list *share-store*)] #:when (regexp-match "^fringe-" (path->string f)))
+      (delete-file (build-path *share-store* f)))
     (write-fringe-to-disk (vector) d-1)
     (write-fringe-to-disk (vector start-position) d0)
     (cfs-file (make-fringe *share-store* (list (make-filespec "fringe-d-1" 0 (file-size d-1) *share-store*)) 0)
