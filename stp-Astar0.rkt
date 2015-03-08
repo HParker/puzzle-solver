@@ -1,5 +1,9 @@
 #lang racket
 
+#| TO DO
+- change 'replace to multi-way-merge in flush-buffer
+|#
+
 (require "stp-init.rkt"
          "stp-solve-base.rkt"
          "stp-fringefilerep.rkt"
@@ -68,6 +72,8 @@
 (define (get-f-val p) (bytes-ref p 0))
 ;; get-g-val: a*pos -> byte
 (define (get-g-val p) (- (get-f-val p) (heuristic (subbytes p 1))))
+;; get-raw-pos: a*pos -> bytes
+(define (get-raw-pos p) (subbytes p 1))
 ;; make-a*pos: number(0-255) byte-string -> byte-string
 (define (make-a*pos f bs) (bytes-append (bytes f) bs))
 
@@ -97,17 +103,24 @@
 ;; flush-fb:  -> void
 ;; write fakebuffer to file but remove duplicates -- preserving the position with lowest g value
 (define (flush-fb [ofile "tobemerged"])
-  (let ([last-pos #"noneseenyet"]
+  (let ([last-pos #f]
         [actually-written 0]
         [bytes-to-read (add1 *num-pieces*)])
     (printf "flushing fakebuffer with ~a positions~%" fb-ptr)
     (with-output-to-file ofile
       (lambda ()
         (for ([n fb-ptr]
-              [p fakebuffer]
-              #:unless (bytes=? (subbytes p 1) last-pos))
-          (write-bs->file p (current-output-port) bytes-to-read)
-          (set! actually-written (add1 actually-written))))
+              [p fakebuffer])
+          (cond [(not last-pos) (set! last-pos p)]
+                [(bytes=? (subbytes p 1) (subbytes last-pos 1))
+                 ;; want the one with the lowest f-value
+                 (set! last-pos (make-a*pos (min (get-f-val last-pos) (get-f-val p)) (subbytes last-pos 1)))]
+                [else
+                 (write-bs->file last-pos (current-output-port) bytes-to-read)
+                 (set! actually-written (add1 actually-written))
+                 (set! last-pos p)]))
+        (write-bs->file last-pos (current-output-port) bytes-to-read)
+        (set! actually-written (add1 actually-written)))
       #:exists 'replace)
     (set! fb-ptr 0)
     (printf "........ wrote ~a non-duplicate positions~%" actually-written)))
@@ -173,39 +186,46 @@
   (printf "A*-file-search: best-f-depth=~a~%" best-f)
   (let ([iport (open-input-file file-name)]
         [num-read 0])
-    (for ([a*p (in-port (lambda (i) (read-bytes (add1 *num-pieces*) i)) iport)])
-      (set! num-read (add1 num-read))
-      (when (= (get-f-val a*p) best-f)
-        (process-position a*p best-f)))
-    (write-fb-to-file)
-    ;; merge duplicates, etc.
+    (for ([a*p (in-port (lambda (i) (read-bytes (add1 *num-pieces*) i)) iport)]
+          #:break *found-goal*)
+      (cond [(is-goal? (hc-position 0 (get-raw-pos a*p)))
+             (set! *found-goal* a*p)
+             (printf "found goal ~s at depth ~a moves~%"
+                     *found-goal* (get-g-val *found-goal*))]
+            [else
+             (set! num-read (add1 num-read))
+             (when (= (get-f-val a*p) best-f)
+               (process-position a*p best-f))]))
     (close-input-port iport)
-    (cond [*found-goal*
-           (printf "found goal after ~a moves with ~a closed positions and ~a on unfinished open-lists and total successors handled ~a~%"
-                   (g-score (hc-position-bs *found-goal*)) (set-count closed-set) (for/sum ([l vools]) (length l)) total-positions-handled)
-           *found-goal*]
-          [else 
-           (merge-two-files "astarnodelist" "tobemerged")
-           (rename-file-or-directory "newastarnodelist" file-name #t)
-           (printf "... finished pass reading ~a positions from file~%" num-read)
-           (a*-file-search file-name (add1 best-f))])
+    ;; merge duplicates, etc.
+    (unless *found-goal*
+      (write-fb-to-file)
+      (merge-two-files "astarnodelist" "tobemerged")
+      (rename-file-or-directory "newastarnodelist" file-name #t)
+      (printf "... finished pass reading ~a positions from file~%" num-read)
+      (a*-file-search file-name (add1 best-f)))
     ))
 
 ;; process-position: a*pos number  -> 
 ;; expand and do whatever is appropriate for each successor
-(define (process-position a*p best-f)
+(define (process-position a*p best-f [posset (mutable-set)])
   (let* ([parent-f-val (get-f-val a*p)]
          [parent-pos (subbytes a*p 1)]
          [parent-g-val (- parent-f-val (heuristic parent-pos))])
-    (for ([s (expand-a* parent-pos)])
+    (set-add! posset parent-pos)
+    (for ([s (expand-a* parent-pos)]
+          #:unless (set-member? posset s))
       (let* ([s-h (heuristic s)]
              [s-f (+ s-h parent-g-val 1)]
              [a*s (make-a*pos s-f s)])
+        (set-add! posset s)
         (write-to-fb a*s) 
         (when (fb-full?) (write-fb-to-file))
         (when (<= s-f best-f)
-          ;(printf "process-position: filling in expansion for f-value (~a) better than best-f (~a)~%" s-f best-f)
-          (process-position a*s best-f))))))
+          #|(printf "process-position ~s: filling in expansion for f-value (~a + ~a) better than parent (~a + ~a) with best-f (~a)~%"
+                  s (- s-f s-h) s-h parent-g-val (- parent-f-val parent-g-val) best-f)
+          |#
+          (process-position a*s best-f posset))))))
 
 
 ;;--------------------------------------------------------------
@@ -335,7 +355,9 @@
          [half-c-diff (/ c-diff 2)]
          [mmd (+ half-c-diff r-diff)]
          )
-    (floor (+ mmd (sqr (sub1 (max 1 mmd)))))))
+    ;(floor (+ mmd (sqr (sub1 (max 1 mmd)))))
+    (floor mmd)
+    ))
 
 (define (c15-heuristic p)
   (let* ([pt1-loc (- (bytes-ref p 4) *charify-offset*)]
@@ -381,5 +403,5 @@
                              (current-output-port) (add1 *num-pieces*)))
   #:exists 'replace)
 
-(time (a*-search 0))
-;(time (a*-file-search "astarnodelist" (f-score (hc-position-bs *start*))))
+;(time (a*-search 0))
+(time (a*-file-search "astarnodelist" (f-score (hc-position-bs *start*))))
