@@ -48,8 +48,10 @@
   ;; initialization of fringe files
   (let ([d-1 (format "~afringe-d-1" *share-store*)]
         [d0 (format "~afringe-d0" *share-store*)])
+    #|
     (for ([f (directory-list *share-store*)] #:unless (char=? #\. (string-ref (path->string f) 0))) 
       (delete-file (build-path *share-store* f))) ; actually should use pattern match to delete only fringe* or proto*
+    |#
     (write-fringe-to-disk (vector) d-1)
     (write-fringe-to-disk (vector start-position) d0)
     (cfs-file (make-fringe *share-store* (list (make-filespec "fringe-d-1" 0 (file-size d-1) *share-store*)) 0)
@@ -85,12 +87,12 @@
   ;; Switch between these according to if using the cluster or testing on multi-core single machine
   (connect-to-riot-server! *master-name*)
   (init-workers)
-  (define search-result (time (start-cluster-fringe-search *start*)))
-  #|
-  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d53-" 2 "fringefiles/")
-                                        (make-fringe-from-files "fringe-segment-d54-" 2 "fringefiles/")
-                                        55)))
-  |#
+  ;(define search-result (time (start-cluster-fringe-search *start*)))
+  ;#|
+  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d142-" 12 "/space/bigspace/fringefiles/")
+                                        (make-fringe-from-files "fringe-segment-d143-" 12 "/space/bigspace/fringefiles/")
+                                        144)))
+  ;|#
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d29-" 4 "fringefiles/")
                                         (make-fringe-from-files "fringe-segment-d30-" 4 "fringefiles/")

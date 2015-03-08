@@ -57,7 +57,7 @@
                      (vector-set! v j temp)))]
            )
     (qsort-aux start (sub1 end))
-    (insertion-sort v compare)))
+    (insertion-sort v compare start end)))
 
 
 ;; After looking in the rnrs/sorting-6 code for vector-sort!, which uses vector->list, list->vector, and vector-copy!,
@@ -89,7 +89,7 @@
 
 ;; insertion-sort : (vectorof X) (X X -> boolean) -> void
 ;; for use in sorting a "nearly" sorted vector from quicksort with relaxed stopping criterion
-(define (insertion-sort v compare)
+(define (insertion-sort v compare [start 0] [end (vector-length v)])
   (letrec ([vl (vector-length v)]
           ;; everything from i to vector-length is now sorted
           [isrt (lambda (i)
@@ -98,12 +98,12 @@
                               (isrt (sub1 i))]))]
           ;; insert j into j+1 to vector-length (which is completely sorted)
           [insert (lambda (j val)
-                    (cond [(or (= j vl) 
+                    (cond [(or (= j end) 
                                (compare val (vector-ref v j)))
                            (vector-set! v (sub1 j) val)]
                           [else (vector-set! v (sub1 j) (vector-ref v j))
                                 (insert (add1 j) val)]))])
-    (isrt vl)))
+    (isrt end)))
                                            
 
 
