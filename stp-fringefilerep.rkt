@@ -22,7 +22,7 @@ and provide uniform interface for solvers to access fringes as if they were simp
 
 Data definitions included here:
 - fringe: (vector full-path-to-file (listof segment-spec) number-of-positions)
-- filespec is a list: (list min-hashcode max-hashcode fname position-count file-size) [assuming the positions in the file are sorted]
+- filespec:
 - fhead (short for fringehead) is a structure (make-fringehead position input-port readcount totalcount)
 
 findex (short for fringe-index): (listof segment-spec) [assumes the list of segment-specs is sorted]
@@ -216,7 +216,9 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; read-bs->hcpos: input-port [number] -> hc-position
 ;; read a bytestring from the given input-port and create hc-position
 (define (read-bs->hcpos in [num-bytes *num-pieces*])
-  (let ([bspos (read-compressed-bs->bs in)]) ;(read-bytes num-bytes in)]
+  (let ([bspos (read-bytes num-bytes in)
+               ;(read-compressed-bs->bs in)
+               ])
     (if (eof-object? bspos) bspos (make-hcpos bspos))))
 
 ;; fringe-exists?: fringe -> boolean

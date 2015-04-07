@@ -87,12 +87,12 @@
   ;; Switch between these according to if using the cluster or testing on multi-core single machine
   (connect-to-riot-server! *master-name*)
   (init-workers)
-  ;(define search-result (time (start-cluster-fringe-search *start*)))
-  ;#|
+  (define search-result (time (start-cluster-fringe-search *start*)))
+  #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d142-" 12 "/space/bigspace/fringefiles/")
                                         (make-fringe-from-files "fringe-segment-d143-" 12 "/space/bigspace/fringefiles/")
                                         144)))
-  ;|#
+  |#
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d29-" 4 "fringefiles/")
                                         (make-fringe-from-files "fringe-segment-d30-" 4 "fringefiles/")
