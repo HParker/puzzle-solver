@@ -372,8 +372,7 @@
                             [local-PFS-fspec local-protofringe-fspecs]
                             #:unless (or (equal? (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec))
                                          (zero? (filespec-pcount shared-PFS-fspec))))
-                        (copy-file (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec))
-                        )]
+                        (copy-file (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec)))]
          ;[local-protofringe-fspecs (for/list ([fs (in-vector slice-fspecs)] #:unless (zero? (filespec-pcount fs))) fs)]
          ;[pmsg1 (printf "distmerge-debug1: ~a fspecs in ~a~%" (vector-length slice-fspecs) local-protofringe-fspecs)]
          ;******
@@ -419,13 +418,12 @@
       ;; delete the proto-fringe-segments that were copied to the *local-store*
       (for ([fspc (in-list local-protofringe-fspecs)]) 
         (delete-file (filespec-fullpathname fspc))) ;remove the local expansions *** but revisit when we reduce work packet size for load balancing
-      ;; delete the proto-fringe-segments on the *share-store*
-      (for ([fspc (in-list slice-fspecs)])
-        (delete-file (filespec-fullpathname fspc))))
+      )
     (list ofile-name segment-size)))
 
 ;; remote-merge: (listof (list number number)) (vectorof (vectorof fspec)) int fringe fringe -> (listof string int)
-;; merge the proto-fringes from the workes and remove duplicate positions appearing in either prev- or current-fringes at the same time.
+;; merge the proto-fringes from the workers and, depending on value of *late-dulicate-removal*, 
+;; remove duplicate positions appearing in either prev- or current-fringes at the same time.
 ;; ranges is a list of pairs for position indices to be covered by the corresponding slice
 ;; expand-files-specs (proto-fringe-specs) is vector of vector of filespecs, the top-level has one for each slice,
 ;; each one containing as many proto-fringes as expanders, all of which need to be merged
@@ -509,8 +507,9 @@
       ;(printf "distributed-expand-fringe: concatenating ~a~%" f)
       (system (format "cat ~a >> fringe-d~a" f depth)))|#
     ;;--- delete files we don't need anymore ---------
-    (for ([fspecs (in-vector proto-fringe-fspecs)])
-      (for ([fspec (in-vector fspecs)]) (delete-file (filespec-fullpathname fspec))))
+    (for* ([fspecs (in-vector proto-fringe-fspecs)]
+           [fspec (in-vector fspecs)])
+      (delete-file (filespec-fullpathname fspec)))
     ;(system "rm partial-expansion* partial-merge*")
     ;(unless (string=? *master-name* "localhost") (delete-file (fspec-fname cf-spec)))
     ;; file-copy, expansion, merge, total
