@@ -34,4 +34,4 @@ This file is under version control.  Create a _copy_ named "configenv.rkt" to th
 
 ;;--- Puzzle values ----------------
 (define *puzzle-name* "climb12") ;; one of climb12, climb15, climbpro24
-(define *max-depth* 240)
+(define *max-depth* 239)
