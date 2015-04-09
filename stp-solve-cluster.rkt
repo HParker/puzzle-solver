@@ -365,20 +365,22 @@
   ;(printf "prev-fring: ~a~%curr-fringe: ~a~%" pf cf) 
   ;(printf "distributed-merge-proto-fringe-slices: ")
   ;(for ([fs slice-fspecs]) (printf "~a: ~a;  " (filespec-fname fs) (filespec-pcount fs))) (printf "~%")
-  (let* ([mrg-segment-oport (open-output-file (format "~a~a" *share-store* ofile-name) #:exists 'replace)] ; try writing directly to NFS
-         [local-protofringe-fspecs (for/list ([fs slice-fspecs]) (rebase-filespec fs *local-store*))]
+  (let* ([slice-fspecs-fbase (filespec-fbase (vector-ref slice-fspecs 0))]
+         [mrg-segment-oport (open-output-file (format "~a~a" *share-store* ofile-name) #:exists 'replace)] ; try writing directly to NFS
+         [local-protofringe-fspecs (for/vector ([fs slice-fspecs]
+                                                #:unless (zero? (filespec-pcount fs))) (rebase-filespec fs *local-store*))]
          ;; copy PFSs from share-store to local-store
-         [copy-result (for ([shared-PFS-fspec slice-fspecs]
-                            [local-PFS-fspec local-protofringe-fspecs]
-                            #:unless (or (equal? (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec))
-                                         (zero? (filespec-pcount shared-PFS-fspec))))
-                        (copy-file (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec)))]
+         [copy-result (unless (string=? slice-fspecs-fbase *local-store*)
+                        (for ([shared-PFS-fspec (for/vector ([fs slice-fspecs] #:when (positive? (filespec-pcount fs))) fs)]
+                              [local-PFS-fspec local-protofringe-fspecs]
+                              )
+                          (copy-file (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec))))]
          ;[local-protofringe-fspecs (for/list ([fs (in-vector slice-fspecs)] #:unless (zero? (filespec-pcount fs))) fs)]
          ;[pmsg1 (printf "distmerge-debug1: ~a fspecs in ~a~%" (vector-length slice-fspecs) local-protofringe-fspecs)]
          ;******
          ;****** move the fringehead creation inside the heap-o-fhead construction in order to avoid the short-lived list allocation *******
          [to-merge-fheads 
-          (for/list ([exp-fspec (in-list local-protofringe-fspecs)])
+          (for/list ([exp-fspec (in-vector local-protofringe-fspecs)])
             (fh-from-filespec exp-fspec))]
          ;[pmsg2 (printf "distmerge-debug2: made 'to-merge-fheads' having ~a fringeheads~%" (length to-merge-fheads))]
          [heap-o-fheads (let ([lheap (make-heap (lambda (fh1 fh2) (hcposition<? (fringehead-next fh1) (fringehead-next fh2))))])
@@ -413,12 +415,10 @@
                          num-written)])
     (close-output-port mrg-segment-oport)
     (for ([fhead (in-list to-merge-fheads)]) (close-input-port (fringehead-iprt fhead)))
-    (unless (or #t 
-                (string=? *master-name* "localhost"))
-      ;; delete the proto-fringe-segments that were copied to the *local-store*
-      (for ([fspc (in-list local-protofringe-fspecs)]) 
-        (delete-file (filespec-fullpathname fspc))) ;remove the local expansions *** but revisit when we reduce work packet size for load balancing
-      )
+    ;; delete the proto-fringe-segments if they were copied to the *local-store* 
+    (unless (string=? slice-fspecs-fbase *local-store*)
+      (for ([fspc (in-vector local-protofringe-fspecs)]) 
+        (delete-file (filespec-fullpathname fspc)))) ; *** but revisit when we reduce work packet size for load balancing
     (list ofile-name segment-size)))
 
 ;; remote-merge: (listof (list number number)) (vectorof (vectorof fspec)) int fringe fringe -> (listof string int)
@@ -507,6 +507,7 @@
       ;(printf "distributed-expand-fringe: concatenating ~a~%" f)
       (system (format "cat ~a >> fringe-d~a" f depth)))|#
     ;;--- delete files we don't need anymore ---------
+    ;; delete proto-fringe-segments on the *share-store*
     (for* ([fspecs (in-vector proto-fringe-fspecs)]
            [fspec (in-vector fspecs)])
       (delete-file (filespec-fullpathname fspec)))
