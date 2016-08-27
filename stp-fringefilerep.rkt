@@ -7,9 +7,10 @@
          racket/format)
 
 (require 
- ;racket/generator
- "stp-init.rkt"
- "stp-solve-base.rkt")
+  ;racket/generator
+  "stpconfigs/configenv.rkt"
+  "stp-init.rkt"
+  "stp-solve-base.rkt")
 
 (provide (all-defined-out))
 
@@ -21,7 +22,7 @@ and provide uniform interface for solvers to access fringes as if they were simp
 
 Data definitions included here:
 - fringe: (vector full-path-to-file (listof segment-spec) number-of-positions)
-- filespec is a list: (list min-hashcode max-hashcode fname position-count file-size) [assuming the positions in the file are sorted]
+- filespec:
 - fhead (short for fringehead) is a structure (make-fringehead position input-port readcount totalcount)
 
 findex (short for fringe-index): (listof segment-spec) [assumes the list of segment-specs is sorted]
@@ -38,7 +39,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 (define (fringe-fbase an-fs) (vector-ref an-fs 0))
 (define (fringe-segments an-fs) (vector-ref an-fs 1))
 (define (fringe-fullpathnames an-fs)
-  (for/list ([seg (fringe-segments an-fs)]) (string-append (fringe-fbase an-fs) (filespec-fname seg))))
+  (for/list ([seg (in-list (fringe-segments an-fs))]) (string-append (fringe-fbase an-fs) (filespec-fname seg))))
 (define (fringe-pcount an-fs) (vector-ref an-fs 2))
 
 
@@ -123,7 +124,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                 [(firstfullpathname) (filespec-fullpathname (car active-fspecs))]
                 [(inprt) (open-input-file firstfullpathname)]
                 [(new-fh) (fringehead (read-bs->hcpos inprt) inprt active-fspecs (add1 dropped) (fringe-pcount f))])
-    (for ([i (- skip dropped)]) (advance-fhead! new-fh))
+    (for ([i (in-range (- skip dropped))]) (advance-fhead! new-fh))
     #|(printf "fh-from-fringe: leaving, looking at ~a w/ fh-next = ~a, fh-readcount = ~a, asked to advance to ~a~%" 
             (filespec-fullpathname (first (fringehead-filespecs new-fh))) (fringehead-next new-fh) (fringehead-readcount new-fh) skip)|#
     new-fh))
@@ -153,6 +154,21 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; -----------------------------------------------------------------------------------
 ;; --- BULK FRINGE READING/WRITING ---------------------------------------------------
 
+;; bs->compressed-bs: bytes -> bytes
+;; compress the given bytes -- currently just a stub
+(define (bs->compressed-bs bs)
+  bs)
+
+;; write-pos: bytes output-port -> number
+;; write the given bytestring to the output port after compressing, returning number of bytes written
+(define (write-pos bs oprt)
+  (write-bytes (bs->compressed-bs bs) oprt))
+
+;; read-pos: input-port -> hc-position
+;; read the proper number of bytes from the input-port and convert to hc-position
+(define (read-compressed-bs->bs iprt)
+  (read-bytes *num-pieces* iprt))
+
 ;; write-fringe-to-disk: (listof or vectorof hc-position) string -> int
 ;; writes the bytestring portions of the hc-positions from the given fringe (whether list or vector) into a file with given file-name.
 ;; return the number written, not counting duplicates if remove-dupes is non-false
@@ -164,8 +180,8 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                      how-many)]
         [last-pos #"NoLastPos"]
         [num-written 0])
-    (for ([i stop-at]
-          [hcposition fringe])
+    (for ([i (in-range stop-at)]
+          [hcposition (in-vector fringe)])
       (let ([hc-bs (hc-position-bs hcposition)])
         (cond [remove-dupes
                (unless (bytes=? hc-bs last-pos)
@@ -195,12 +211,15 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; writes the bs to the ofile and checks to make sure the optionally-specified number of bytes were written
 (define (write-bs->file bspos [oprt (current-output-port)] [num-bytes *num-pieces*])
   (unless (= (write-bytes bspos oprt) num-bytes)
-    (error "write-bs->file: failed to write an exact position")))
+    (error (string-append "write-bs->file: failed to write an exact position: "
+                          (bytes->string/utf-8 (if (= num-bytes *num-pieces*) bspos (subbytes bspos 1)))))))
 
 ;; read-bs->hcpos: input-port [number] -> hc-position
 ;; read a bytestring from the given input-port and create hc-position
 (define (read-bs->hcpos in [num-bytes *num-pieces*])
-  (let ([bspos (read-bytes num-bytes in)])
+  (let ([bspos (read-bytes num-bytes in)
+               ;(read-compressed-bs->bs in)
+               ])
     (if (eof-object? bspos) bspos (make-hcpos bspos))))
 
 ;; fringe-exists?: fringe -> boolean
@@ -221,18 +240,70 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; copy the files in the given fringe to the target, returning a new fringe
 (define (copy-fringe f target)
   (make-fringe target
-               (for/list ([fspec (fringe-segments f)])
+               (for/list ([fspec (in-list (fringe-segments f))])
                  (let ([remote-name  (string-append target (filespec-fullpathname fspec))])
                    (unless (file-exists? remote-name)
                      (copy-file (filespec-fullpathname fspec) remote-name))
                    (rebase-filespec fspec target)))
                (fringe-pcount f)))
                  
+;; resegment-fringe: fringe number string -> symbol
+;; given a fringe, redistribute it over the given number of segments
+;; CURRENTLY only a utility function that can be used prior to initiating a run
+(define (resegment-fringe f n [new-fringe-folder-name "newfringe/"])
+  (unless (directory-exists? (string-append *share-store* new-fringe-folder-name))
+    (make-directory (string-append *share-store* new-fringe-folder-name)))
+  (let* (;; current segment boundaries
+         (current-slice-bounds (compute-segment-bounds (length (fringe-segments f))))
+         ;; determine new segment boundaries based on n
+         (new-slice-bounds (compute-segment-bounds n))
+         ;; create the fringehead for the given fringe
+         (fh (fh-from-fringe f))
+         ;; segment-base-name
+         (seg-base (substring (filespec-fname (car (fringe-segments f)))
+                              0 (- (string-length (filespec-fname (car (fringe-segments f)))) 3)))
+         ;; vector of file-names (eventual filespecs) for creating the new fringe
+         (fnames (make-vector n))
+         )
+    ;; go through each position and switch output files when needed
+    (do ([i 0] ;; output-segment currently written
+         [fsout (open-output-file (string-append *share-store* new-fringe-folder-name seg-base (~a 0 #:left-pad-string "0" #:width 3 #:align 'right))
+                                  #:exists 'replace)] ;; current output-port
+         [fspecs null] ;; build the list of filespecs
+         [pos (fringehead-next fh) (advance-fhead! fh)])
+      ((fhdone? fh) 
+       (close-output-port fsout)
+       (vector-set! fnames i (string-append new-fringe-folder-name seg-base (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
+       fnames)
+      (when (>= (hc-position-hc pos) (vector-ref new-slice-bounds (add1 i)))
+        ;; close current output
+        (close-output-port fsout)
+        ;; create filespec
+        (vector-set! fnames i (string-append new-fringe-folder-name seg-base (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
+        ;; advance counter
+        (set! i (add1 i))
+        ;; open next output
+        (set! fsout (open-output-file (string-append *share-store* new-fringe-folder-name seg-base (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+                                      #:exists 'replace))
+        )
+      (write-bytes (hc-position-bs pos) fsout)
+      )))
+
+;; compute-segment-bounds: number -> (vectorof number)
+;; determine the segment bounds for the given number of slices
+(define (compute-segment-bounds n)
+  (let* ([slice-width (floor (/ (- *most-positive-fixnum* *most-negative-fixnum*) n))]
+         [slices (for/vector #:length (add1 n)
+                   ([i n])
+                   (+ *most-negative-fixnum* (* i slice-width)))])
+    (vector-set! slices n (add1 *most-positive-fixnum*))
+    slices))
+
 
 ;; delete-fringe: fringe -> void
 ;; remove all the files that make up the given fringe
 (define (delete-fringe f [fbase (fringe-fbase f)])
-  (for ([seg (fringe-segments f)]
+  (for ([seg (in-list (fringe-segments f))]
         #:when (file-exists? (string-append fbase (filespec-fname seg))))
     (delete-file (string-append fbase (filespec-fname seg)))))
 
@@ -266,7 +337,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; reports the number of positions in the given fringe file assuming the file was written with write-fringe-to-disk
 (define (position-count-in-file f)
   (/ (file-size f) *num-pieces*))
-                    
+
 ;; check-sorted-fringe?: string -> boolean
 ;; assuming the string, f, points to a sorted file of positions, check to make sure they are sorted
 (define (check-sorted-fringe? f)
@@ -292,10 +363,9 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
   (let ([pcount 0])
     (make-fringe 
      path-to-fringe-segments ;;*share-store*
-     (for/list ([i n-seg])
+     (for/list ([i (in-range n-seg)])
        (let* ([f (format "~a~a" base-string (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
-              [lpcount (read-from-string (with-output-to-string 
-                                          (lambda () (position-count-in-file (string-append path-to-fringe-segments f)))))])
+              [lpcount (position-count-in-file (string-append path-to-fringe-segments f))])
          (set! pcount (+ pcount lpcount))
          (make-filespec f lpcount (file-size (string-append path-to-fringe-segments f)) path-to-fringe-segments)))
      pcount)))
@@ -304,7 +374,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 ;; when a fringe is stored in a single file (instead of being spread over a number of segments),
 ;; create and return the fringe structure consisting of the given file, found in the optional path (expected to be *share-store*)
 (define (make-fringe-from-file file [path-to-fringefile ""])
-  (let ([filepcount (read-from-string (with-output-to-string (lambda () (position-count-in-file file))))])
+  (let ([filepcount (position-count-in-file file)])
     (make-fringe path-to-fringefile
                  (list (make-filespec file filepcount (file-size file) path-to-fringefile))
                  filepcount)))

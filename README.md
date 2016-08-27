@@ -1,4 +1,4 @@
-# puzzle-solver
+# Parallel Search in Sliding-tile Puzzles
 
 Research code for exploring parallel search algorithms
 applied to sliding-tile puzzles that give rise to
@@ -11,7 +11,6 @@ Parallelism has been tested on a 32-node cluster
 using the [Riot planet package](http://planet.racket-lang.org/display.ss?package=riot.plt&owner=gcr).
 
 ## Overview
-
 
 - stp-init.rkt (global parameters, data-definitions,
 functions for converting between formats, puzzle initialization data, etc)
@@ -44,8 +43,10 @@ Usually, you can simply create a symbolic link to `./stpconfigs/configenvlocal.r
 but you can create a copy and edit it to your particular situation.
 
 1. In one shell, run `racket -p gcr/riot/server`
-2. For each worker process (e.g., the number of available cores), open a shell and run `racket -p gcr/riot/worker -- localhost` or substitute the hostname of the server process in step 1 if you're using different hosts for workers
-3. You can confirm that the workers have registered with the server by inspecting the output from the shell in step 1.
+2. For each worker process (e.g., the number of available cores), 
+open a shell and run `racket -p gcr/riot/worker -- localhost` 
+or substitute the hostname of the server process in step 1
+if you're using different hosts for workers
+3. You can confirm that the workers have registered with the server
+by inspecting the output from the shell in step 1.
 4. Finally, run `racket stp-solve-cluster.rkt` and watch it churn through the search.
-
-

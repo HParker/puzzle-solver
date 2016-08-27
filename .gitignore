@@ -1,6 +1,8 @@
 # Sliding-Tile Puzzle Files
 fringefiles/fringe-segment*
+fringefiles/fringe-d*
 stpconfigs/*.rkt
+savefringes/
 
 # Emacs or Racket backup files
 *~
@@ -51,6 +53,7 @@ pip-log.txt
 *.log
 *.sql
 *.sqlite
+log/
 
 # OS generated files #
 ######################
