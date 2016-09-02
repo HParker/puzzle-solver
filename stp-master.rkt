@@ -1,109 +1,838 @@
-#lang racket/base
+#reader(lib"read.ss""wxme")WXME0108 ## 
+#|
+   This file uses the GRacket editor format.
+   Open this file in DrRacket version 6.4 or later to read it.
 
-(require (planet gcr/riot))
-(require "stpconfigs/configenv.rkt"
-         "stp-init.rkt"
-         "stp-solve-base.rkt"
-         "stp-fringefilerep.rkt"
-         "stp-spaceindex.rkt"
-         "stp-solve-cluster.rkt"
-         "stp-worker.rkt")
+   Most likely, it was created by saving a program in DrRacket,
+   and it probably contains a program with non-text elements
+   (such as images or comment boxes).
 
-(define *diy-threshold* 5000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
-(define *level-start-time* 0)
-
-
-;; expand-fringe: fringe fringe int -> fringe
-;; Given the prev- and current-fringes, and the current depth of search,
-;; do the expansions and merges as appropriate, returning the new fringe
-(define (expand-fringe prev-fringe current-fringe depth)
-  (if (< (fringe-pcount current-fringe) *diy-threshold*)
-      ;; do it myself
-      (expand-fringe-self prev-fringe current-fringe depth)
-      ;; else call distributed-expand, which will farm out to workers
-      (distributed-expand-fringe prev-fringe current-fringe depth)))
-
-
-;; cfs-file: fringe fringe int -> position
-;; perform a file-based cluster-fringe-search at given depth
-;; using given previous and current fringes
-(define (cfs-file prev-fringe current-fringe depth)
-  (set! *level-start-time* (current-seconds))
-  (cond [(or (zero? (fringe-pcount current-fringe)) (> depth *max-depth*)) #f]
-        [*found-goal*
-         (print "found goal")
-         *found-goal*]
-        [else (let ([new-fringe (expand-fringe prev-fringe current-fringe depth)])
-                (printf "At depth ~a: current-fringe has ~a positions (and new-fringe ~a) in ~a (~a)~%" 
-                        depth (fringe-pcount current-fringe) (fringe-pcount new-fringe)
-                        (- (current-seconds) *level-start-time*) (seconds->time (- (current-seconds) *level-start-time*)))
-                (flush-output)
-                ;;(for ([p current-fringe]) (displayln p))
-                (cfs-file current-fringe ;; use current-fringe as prev-fringe at next level
-                          new-fringe
-                          (add1 depth)))]))
-
-;; start-cluster-fringe-search: hc-position -> ...
-(define (start-cluster-fringe-search start-position)
-  ;; initialization of fringe files
-  (let ([d-1 (format "~afringe-d-1" *share-store*)]
-        [d0 (format "~afringe-d0" *share-store*)])
-    (for ([f (directory-list *share-store*)] #:when (regexp-match "^fringe-" (path->string f)))
-      (delete-file (build-path *share-store* f)))
-    (write-fringe-to-disk (vector) d-1)
-    (write-fringe-to-disk (vector start-position) d0)
-    (cfs-file (make-fringe *share-store* (list (make-filespec "fringe-d-1" 0 (file-size d-1) *share-store*)) 0)
-              (make-fringe *share-store* (list (make-filespec "fringe-d0" 1 (file-size d0) *share-store*)) 1)
-              1)))
-
-;(compile-ms-array! *piece-types* *bh* *bw*)
-(compile-spaceindex (format "~a-spaceindex.rkt" *puzzle-name*))
-
-;; canonicalize the *start* blank-configuration
-(let* ([spacelist (bwrep->list (intify (hc-position-bs *start*) 0 4))]
-       [cbref (rcpair->rcbyte (loc-to-cell (car spacelist)))]
-       [canonical-spaces (apply canonize spacelist)])
-  (bytes-set! (hc-position-bs *start*) 0 cbref)
-  (bytes-copy! (hc-position-bs *start*) 1 canonical-spaces)
-  (hc-position-bs *start*))
-
-
-;; fake-init: number -> number
-;; run on worker -- just cause the workers to load the spaceindex
-(define (fake-init i)
-  (add1 i))
-
-;; init-workers: -> void
-;; get the workers to load the spaceindex, etc.
-(define (init-workers)
-  (for/work ([i (in-range *n-processors*)])
-            (fake-init i)))
-
-
-;#|
-(module+ main
-  ;; Switch between these according to if using the cluster or testing on multi-core single machine
-  (connect-to-riot-server! *master-name*)
-  (init-workers)
-  (define search-result (time (start-cluster-fringe-search *start*)))
-  #|
-  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d142-" 12 "/space/bigspace/fringefiles/")
-                                        (make-fringe-from-files "fringe-segment-d143-" 12 "/space/bigspace/fringefiles/")
-                                        144)))
-  |#
-  #|
-  (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d29-" 4 "fringefiles/")
-                                        (make-fringe-from-files "fringe-segment-d30-" 4 "fringefiles/")
-                                        31)))
-  |#
-  #|
-  (define search-result (time (cfs-file (make-fringe-from-file "c12d59fringe" "fill-in-path-to-fringe-file")
-                                        (make-fringe-from-file "c12d58fringe" "fill-in-path-to-fringe-file")
-                                        1)))
-  |#
-  (print search-result)
-  )
-;|#
-
-;(time (start-cluster-fringe-search *start*))
-
+            http://racket-lang.org/
+|#
+ 32 7 #"wxtext\0"
+3 1 6 #"wxtab\0"
+1 1 8 #"wximage\0"
+2 0 8 #"wxmedia\0"
+4 1 34 #"(lib \"syntax-browser.ss\" \"mrlib\")\0"
+1 0 16 #"drscheme:number\0"
+3 0 44 #"(lib \"number-snip.ss\" \"drscheme\" \"private\")\0"
+1 0 36 #"(lib \"comment-snip.ss\" \"framework\")\0"
+1 0 93
+(
+ #"((lib \"collapsed-snipclass.ss\" \"framework\") (lib \"collapsed-sni"
+ #"pclass-wxme.ss\" \"framework\"))\0"
+) 0 0 43 #"(lib \"collapsed-snipclass.ss\" \"framework\")\0"
+0 0 19 #"drscheme:sexp-snip\0"
+0 0 36 #"(lib \"cache-image-snip.ss\" \"mrlib\")\0"
+1 0 68
+(
+ #"((lib \"image-core.ss\" \"mrlib\") (lib \"image-core-wxme.rkt\" \"mr"
+ #"lib\"))\0"
+) 1 0 29 #"drscheme:bindings-snipclass%\0"
+1 0 101
+(
+ #"((lib \"ellipsis-snip.rkt\" \"drracket\" \"private\") (lib \"ellipsi"
+ #"s-snip-wxme.rkt\" \"drracket\" \"private\"))\0"
+) 2 0 88
+(
+ #"((lib \"pict-snip.rkt\" \"drracket\" \"private\") (lib \"pict-snip.r"
+ #"kt\" \"drracket\" \"private\"))\0"
+) 0 0 34 #"(lib \"bullet-snip.rkt\" \"browser\")\0"
+0 0 25 #"(lib \"matrix.ss\" \"htdp\")\0"
+1 0 22 #"drscheme:lambda-snip%\0"
+1 0 29 #"drclickable-string-snipclass\0"
+0 0 26 #"drracket:spacer-snipclass\0"
+0 0 57
+#"(lib \"hrule-snip.rkt\" \"macro-debugger\" \"syntax-browser\")\0"
+1 0 26 #"drscheme:pict-value-snip%\0"
+0 0 45 #"(lib \"image-snipr.ss\" \"slideshow\" \"private\")\0"
+1 0 38 #"(lib \"pict-snipclass.ss\" \"slideshow\")\0"
+2 0 55 #"(lib \"vertical-separator-snip.ss\" \"stepper\" \"private\")\0"
+1 0 18 #"drscheme:xml-snip\0"
+1 0 31 #"(lib \"xml-snipclass.ss\" \"xml\")\0"
+1 0 21 #"drscheme:scheme-snip\0"
+2 0 34 #"(lib \"scheme-snipclass.ss\" \"xml\")\0"
+1 0 10 #"text-box%\0"
+1 0 32 #"(lib \"text-snipclass.ss\" \"xml\")\0"
+1 0 1 6 #"wxloc\0"
+          0 0 55 0 1 #"\0"
+0 75 1 #"\0"
+0 12 90 -1 90 -1 3 -1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 255 255 255 1 -1 0 9
+#"Standard\0"
+0 75 10 #"Monospace\0"
+0 9 90 -1 90 -1 3 -1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 255 255 255 1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 1 1 1 1 1 1 0 0 0 0 0 0 -1 -1 2 24
+#"framework:default-color\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 255 255 255 -1 -1 2
+1 #"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 0 0 0 1 1 1 150 0 150 0 0 0 -1 -1 2 15
+#"text:ports out\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 150 0 150 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1.0 0 -1 -1 93 -1 -1 -1 0 0 0 0 0 0 0 0 0 1.0 1.0 1.0 255 0 0 0 0 0 -1
+-1 2 15 #"text:ports err\0"
+0 -1 1 #"\0"
+1 0 -1 -1 93 -1 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 255 0 0 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 0 0 0 1 1 1 0 0 175 0 0 0 -1 -1 2 17
+#"text:ports value\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 0 175 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1.0 0 92 -1 -1 -1 -1 -1 0 0 0 0 0 0 0 0 0 1.0 1.0 1.0 34 139 34 0 0 0 -1
+-1 2 27 #"Matching Parenthesis Style\0"
+0 -1 1 #"\0"
+1.0 0 92 -1 -1 -1 -1 -1 0 0 0 0 0 0 0 0 0 1.0 1.0 1.0 34 139 34 0 0 0 -1
+-1 2 1 #"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 38 38 128 0 0 0 -1 -1 2 37
+#"framework:syntax-color:scheme:symbol\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 38 38 128 0 0 0 -1 -1 2 38
+#"framework:syntax-color:scheme:keyword\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 38 38 128 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 194 116 31 0 0 0 -1 -1 2
+38 #"framework:syntax-color:scheme:comment\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 194 116 31 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 41 128 38 0 0 0 -1 -1 2 37
+#"framework:syntax-color:scheme:string\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 41 128 38 0 0 0 -1 -1 2 35
+#"framework:syntax-color:scheme:text\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 41 128 38 0 0 0 -1 -1 2 39
+#"framework:syntax-color:scheme:constant\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 41 128 38 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 132 60 36 0 0 0 -1 -1 2 49
+#"framework:syntax-color:scheme:hash-colon-keyword\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 132 60 36 0 0 0 -1 -1 2 42
+#"framework:syntax-color:scheme:parenthesis\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 132 60 36 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 255 0 0 0 0 0 -1 -1 2 36
+#"framework:syntax-color:scheme:error\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 255 0 0 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 -1 -1 2 36
+#"framework:syntax-color:scheme:other\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 -1 -1 2 16
+#"Misspelled Text\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 81 112 203 0 0 0 -1 -1 2
+38 #"drracket:check-syntax:lexically-bound\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 81 112 203 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 178 34 34 0 0 0 -1 -1 2 28
+#"drracket:check-syntax:set!d\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 178 34 34 0 0 0 -1 -1 2 37
+#"drracket:check-syntax:unused-require\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 255 0 0 0 0 0 -1 -1 2 36
+#"drracket:check-syntax:free-variable\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 255 0 0 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 68 0 203 0 0 0 -1 -1 2 31
+#"drracket:check-syntax:imported\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 68 0 203 0 0 0 -1 -1 2 47
+#"drracket:check-syntax:my-obligation-style-pref\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 178 34 34 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 116 0 0 0 0 -1 -1 2 50
+#"drracket:check-syntax:their-obligation-style-pref\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 116 0 0 0 0 -1 -1 2 48
+#"drracket:check-syntax:unk-obligation-style-pref\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 139 142 28 0 0 0 -1 -1 2
+49 #"drracket:check-syntax:both-obligation-style-pref\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 139 142 28 0 0 0 -1 -1 2
+26 #"plt:htdp:test-coverage-on\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 -1 -1 2 1
+#"\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 1 0 0 0 0 0 0 255 165 0 0 0 0 -1 -1 2 27
+#"plt:htdp:test-coverage-off\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 1 0 0 0 0 0 0 255 165 0 0 0 0 -1 -1 4 1
+#"\0"
+0 70 1 #"\0"
+1.0 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 1.0 1.0 1.0 1.0 1.0 1.0 0 0 0 0 0 0
+-1 -1 4 4 #"XML\0"
+0 70 1 #"\0"
+1.0 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 1.0 1.0 1.0 1.0 1.0 1.0 0 0 0 0 0 0
+-1 -1 2 37 #"plt:module-language:test-coverage-on\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 -1 -1 2 38
+#"plt:module-language:test-coverage-off\0"
+0 -1 1 #"\0"
+1 0 -1 -1 -1 93 -1 -1 0 1 0 0 0 1 0 0 0 0 0 0 255 165 0 0 0 0 -1 -1 4 1
+#"\0"
+0 71 1 #"\0"
+1.0 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 1.0 1.0 1.0 1.0 1.0 1.0 0 0 0 0 0 0
+-1 -1 4 1 #"\0"
+0 -1 1 #"\0"
+1.0 0 -1 -1 -1 -1 -1 -1 1 0 0 0 0 0 0 0 0 1.0 1.0 1.0 0 0 255 0 0 0 -1
+-1 4 1 #"\0"
+0 71 1 #"\0"
+1.0 0 -1 -1 -1 -1 -1 -1 1 0 0 0 0 0 0 0 0 1.0 1.0 1.0 0 0 255 0 0 0 -1
+-1 4 1 #"\0"
+0 71 1 #"\0"
+1.0 0 -1 -1 -1 -1 -1 -1 0 0 0 0 0 0 0 0 0 1.0 1.0 1.0 0 100 0 0 0 0 -1
+-1           0 584 0 28 3 17 #"#lang racket/base"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 7 #"require"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"planet"
+0 0 24 3 1 #" "
+0 0 14 3 8 #"gcr/riot"
+0 0 24 3 2 #"))"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 7 #"require"
+0 0 24 3 1 #" "
+0 0 19 3 26 #"\"stpconfigs/configenv.rkt\""
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 19 3 14 #"\"stp-init.rkt\""
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 19 3 20 #"\"stp-solve-base.rkt\""
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 19 3 23 #"\"stp-fringefilerep.rkt\""
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 19 3 20 #"\"stp-spaceindex.rkt\""
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 19 3 23 #"\"stp-solve-cluster.rkt\""
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 19 3 16 #"\"stp-worker.rkt\""
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 1 #" "
+0 0 14 3 15 #"*diy-threshold*"
+0 0 24 3 1 #" "
+0 0 21 3 4 #"5000"
+0 0 24 3 2 #") "
+0 0 17 3 62
+#";;**** this must be significantly less than EXPAND-SPACE-SIZE "
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 1 #" "
+0 0 14 3 18 #"*level-start-time*"
+0 0 24 3 1 #" "
+0 0 21 3 1 #"0"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 45 #";; expand-fringe: fringe fringe int -> fringe"
+0 0 24 29 1 #"\n"
+0 0 17 3 72
+(
+ #";; Given the prev- and current-fringes, and the current depth of sea"
+ #"rch,"
+) 0 0 24 29 1 #"\n"
+0 0 17 3 72
+(
+ #";; do the expansions and merges as appropriate, returning the new fr"
+ #"inge"
+) 0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"expand-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 11 #"prev-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 2 #"if"
+0 0 24 3 2 #" ("
+0 0 14 3 1 #"<"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"fringe-pcount"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 2 #") "
+0 0 14 3 15 #"*diy-threshold*"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 6 #"      "
+0 0 17 3 15 #";; do it myself"
+0 0 24 29 1 #"\n"
+0 0 24 3 7 #"      ("
+0 0 14 3 18 #"expand-fringe-self"
+0 0 24 3 1 #" "
+0 0 14 3 11 #"prev-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 6 #"      "
+0 0 17 3 63
+#";; else call distributed-expand, which will farm out to workers"
+0 0 24 29 1 #"\n"
+0 0 24 3 7 #"      ("
+0 0 14 3 25 #"distributed-expand-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 11 #"prev-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 42 #";; cfs-file: fringe fringe int -> position"
+0 0 24 29 1 #"\n"
+0 0 17 3 60
+#";; perform a file-based cluster-fringe-search at given depth"
+0 0 24 29 1 #"\n"
+0 0 17 3 43 #";; using given previous and current fringes"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 2 #" ("
+0 0 14 3 8 #"cfs-file"
+0 0 24 3 1 #" "
+0 0 14 3 11 #"prev-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 4 #"set!"
+0 0 24 3 1 #" "
+0 0 14 3 18 #"*level-start-time*"
+0 0 24 3 2 #" ("
+0 0 14 3 15 #"current-seconds"
+0 0 24 3 2 #"))"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 15 3 4 #"cond"
+0 0 24 3 3 #" [("
+0 0 14 3 2 #"or"
+0 0 24 3 2 #" ("
+0 0 14 3 5 #"zero?"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"fringe-pcount"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 4 #")) ("
+0 0 14 3 1 #">"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 1 #" "
+0 0 14 3 11 #"*max-depth*"
+0 0 24 3 3 #")) "
+0 0 21 3 2 #"#f"
+0 0 24 3 1 #"]"
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"        ["
+0 0 14 3 12 #"*found-goal*"
+0 0 24 29 1 #"\n"
+0 0 24 3 10 #"         ("
+0 0 14 3 5 #"print"
+0 0 24 3 1 #" "
+0 0 19 3 12 #"\"found goal\""
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"         "
+0 0 14 3 12 #"*found-goal*"
+0 0 24 3 1 #"]"
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"        ["
+0 0 14 3 4 #"else"
+0 0 24 3 2 #" ("
+0 0 15 3 3 #"let"
+0 0 24 3 3 #" (["
+0 0 14 3 10 #"new-fringe"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"expand-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 11 #"prev-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 3 #")])"
+0 0 24 29 1 #"\n"
+0 0 24 3 17 #"                ("
+0 0 14 3 6 #"printf"
+0 0 24 3 1 #" "
+0 0 19 3 79
+(
+ #"\"At depth ~a: current-fringe has ~a positions (and new-fringe ~a) i"
+ #"n ~a (~a)~%\""
+) 0 0 24 3 1 #" "
+0 0 24 29 1 #"\n"
+0 0 24 3 24 #"                        "
+0 0 14 3 5 #"depth"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"fringe-pcount"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 3 #") ("
+0 0 14 3 13 #"fringe-pcount"
+0 0 24 3 1 #" "
+0 0 14 3 10 #"new-fringe"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 25 #"                        ("
+0 0 14 3 1 #"-"
+0 0 24 3 2 #" ("
+0 0 14 3 15 #"current-seconds"
+0 0 24 3 2 #") "
+0 0 14 3 18 #"*level-start-time*"
+0 0 24 3 3 #") ("
+0 0 14 3 13 #"seconds->time"
+0 0 24 3 2 #" ("
+0 0 14 3 1 #"-"
+0 0 24 3 2 #" ("
+0 0 14 3 15 #"current-seconds"
+0 0 24 3 2 #") "
+0 0 14 3 18 #"*level-start-time*"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 3 17 #"                ("
+0 0 14 3 12 #"flush-output"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 16 #"                "
+0 0 17 3 42 #";;(for ([p current-fringe]) (displayln p))"
+0 0 24 29 1 #"\n"
+0 0 24 3 17 #"                ("
+0 0 14 3 8 #"cfs-file"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"current-fringe"
+0 0 24 3 1 #" "
+0 0 17 3 50 #";; use current-fringe as prev-fringe at next level"
+0 0 24 29 1 #"\n"
+0 0 24 3 26 #"                          "
+0 0 14 3 10 #"new-fringe"
+0 0 24 29 1 #"\n"
+0 0 24 3 27 #"                          ("
+0 0 14 3 4 #"add1"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"depth"
+0 0 24 3 6 #")))]))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 27 #";; start-distributed-search"
+0 0 17 3 20 #": hc-position -> ..."
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 2 #" ("
+0 0 14 3 24 #"start-distributed-search"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"start-position"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 2 #"  "
+0 0 17 3 33 #";; initialization of fringe files"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 15 3 3 #"let"
+0 0 24 3 3 #" (["
+0 0 14 3 3 #"d-1"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"format"
+0 0 24 3 1 #" "
+0 0 19 3 14 #"\"~afringe-d-1\""
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 2 #")]"
+0 0 24 29 1 #"\n"
+0 0 24 3 9 #"        ["
+0 0 14 3 2 #"d0"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"format"
+0 0 24 3 1 #" "
+0 0 19 3 13 #"\"~afringe-d0\""
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 3 #")])"
+0 0 24 29 1 #"\n"
+0 0 24 3 5 #"    ("
+0 0 15 3 3 #"for"
+0 0 24 3 3 #" (["
+0 0 14 3 1 #"f"
+0 0 24 3 2 #" ("
+0 0 14 3 14 #"directory-list"
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 3 #")] "
+0 0 23 3 6 #"#:when"
+0 0 24 3 2 #" ("
+0 0 14 3 12 #"regexp-match"
+0 0 24 3 1 #" "
+0 0 19 3 10 #"\"^fringe-\""
+0 0 24 3 2 #" ("
+0 0 14 3 12 #"path->string"
+0 0 24 3 1 #" "
+0 0 14 3 1 #"f"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 3 7 #"      ("
+0 0 14 3 11 #"delete-file"
+0 0 24 3 2 #" ("
+0 0 14 3 10 #"build-path"
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 1 #" "
+0 0 14 3 1 #"f"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 3 5 #"    ("
+0 0 14 3 20 #"write-fringe-to-disk"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"vector"
+0 0 24 3 2 #") "
+0 0 14 3 3 #"d-1"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 5 #"    ("
+0 0 14 3 20 #"write-fringe-to-disk"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"vector"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"start-position"
+0 0 24 3 2 #") "
+0 0 14 3 2 #"d0"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 5 #"    ("
+0 0 14 3 8 #"cfs-file"
+0 0 24 3 2 #" ("
+0 0 14 3 11 #"make-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 2 #" ("
+0 0 14 3 4 #"list"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"make-filespec"
+0 0 24 3 1 #" "
+0 0 19 3 12 #"\"fringe-d-1\""
+0 0 24 3 1 #" "
+0 0 21 3 1 #"0"
+0 0 24 3 2 #" ("
+0 0 14 3 9 #"file-size"
+0 0 24 3 1 #" "
+0 0 14 3 3 #"d-1"
+0 0 24 3 2 #") "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 3 #")) "
+0 0 21 3 1 #"0"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 15 #"              ("
+0 0 14 3 11 #"make-fringe"
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 2 #" ("
+0 0 14 3 4 #"list"
+0 0 24 3 2 #" ("
+0 0 14 3 13 #"make-filespec"
+0 0 24 3 1 #" "
+0 0 19 3 11 #"\"fringe-d0\""
+0 0 24 3 1 #" "
+0 0 21 3 1 #"1"
+0 0 24 3 2 #" ("
+0 0 14 3 9 #"file-size"
+0 0 24 3 1 #" "
+0 0 14 3 2 #"d0"
+0 0 24 3 2 #") "
+0 0 14 3 13 #"*share-store*"
+0 0 24 3 3 #")) "
+0 0 21 3 1 #"1"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 14 #"              "
+0 0 21 3 1 #"1"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 44 #";(compile-ms-array! *piece-types* *bh* *bw*)"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 14 3 18 #"compile-spaceindex"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"format"
+0 0 24 3 1 #" "
+0 0 19 3 19 #"\"~a-spaceindex.rkt\""
+0 0 24 3 1 #" "
+0 0 14 3 13 #"*puzzle-name*"
+0 0 24 3 2 #"))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 47 #";; canonicalize the *start* blank-configuration"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 4 #"let*"
+0 0 24 3 3 #" (["
+0 0 14 3 9 #"spacelist"
+0 0 24 3 2 #" ("
+0 0 14 3 11 #"bwrep->list"
+0 0 24 3 2 #" ("
+0 0 14 3 6 #"intify"
+0 0 24 3 2 #" ("
+0 0 14 3 14 #"hc-position-bs"
+0 0 24 3 1 #" "
+0 0 14 3 7 #"*start*"
+0 0 24 3 2 #") "
+0 0 21 3 1 #"0"
+0 0 24 3 1 #" "
+0 0 21 3 1 #"4"
+0 0 24 3 3 #"))]"
+0 0 24 29 1 #"\n"
+0 0 24 3 8 #"       ["
+0 0 14 3 5 #"cbref"
+0 0 24 3 2 #" ("
+0 0 14 3 14 #"rcpair->rcbyte"
+0 0 24 3 2 #" ("
+0 0 14 3 11 #"loc-to-cell"
+0 0 24 3 2 #" ("
+0 0 14 3 3 #"car"
+0 0 24 3 1 #" "
+0 0 14 3 9 #"spacelist"
+0 0 24 3 4 #")))]"
+0 0 24 29 1 #"\n"
+0 0 24 3 8 #"       ["
+0 0 14 3 16 #"canonical-spaces"
+0 0 24 3 2 #" ("
+0 0 14 3 5 #"apply"
+0 0 24 3 1 #" "
+0 0 14 3 8 #"canonize"
+0 0 24 3 1 #" "
+0 0 14 3 9 #"spacelist"
+0 0 24 3 3 #")])"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 10 #"bytes-set!"
+0 0 24 3 2 #" ("
+0 0 14 3 14 #"hc-position-bs"
+0 0 24 3 1 #" "
+0 0 14 3 7 #"*start*"
+0 0 24 3 2 #") "
+0 0 21 3 1 #"0"
+0 0 24 3 1 #" "
+0 0 14 3 5 #"cbref"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 11 #"bytes-copy!"
+0 0 24 3 2 #" ("
+0 0 14 3 14 #"hc-position-bs"
+0 0 24 3 1 #" "
+0 0 14 3 7 #"*start*"
+0 0 24 3 2 #") "
+0 0 21 3 1 #"1"
+0 0 24 3 1 #" "
+0 0 14 3 16 #"canonical-spaces"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 14 #"hc-position-bs"
+0 0 24 3 1 #" "
+0 0 14 3 7 #"*start*"
+0 0 24 3 2 #"))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 30 #";; fake-init: number -> number"
+0 0 24 29 1 #"\n"
+0 0 17 3 65
+#";; run on worker -- just cause the workers to load the spaceindex"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 2 #" ("
+0 0 14 3 9 #"fake-init"
+0 0 24 3 1 #" "
+0 0 14 3 1 #"i"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 4 #"add1"
+0 0 24 3 1 #" "
+0 0 14 3 1 #"i"
+0 0 24 3 2 #"))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 24 #";; init-workers: -> void"
+0 0 24 29 1 #"\n"
+0 0 17 3 85
+(
+ #";; initiate the remote-nodes and places, get the workers to load the"
+ #" spaceindex, etc."
+) 0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 2 #" ("
+0 0 14 3 12 #"init-workers"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 15 3 3 #"for"
+0 0 24 3 3 #" (["
+0 0 14 3 1 #"i"
+0 0 24 3 2 #" ("
+0 0 14 3 8 #"in-range"
+0 0 24 3 1 #" "
+0 0 14 3 14 #"*n-processors*"
+0 0 24 3 3 #")])"
+0 0 24 29 1 #"\n"
+0 0 24 3 13 #"            ("
+0 0 14 3 9 #"fake-init"
+0 0 24 3 1 #" "
+0 0 14 3 1 #"i"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 24 3 1 #"("
+0 0 15 3 6 #"define"
+0 0 24 3 2 #" ("
+0 0 14 3 4 #"main"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 12 #"init-workers"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 15 3 6 #"define"
+0 0 24 3 1 #" "
+0 0 14 3 13 #"search-result"
+0 0 24 3 2 #" ("
+0 0 14 3 4 #"time"
+0 0 24 3 2 #" ("
+0 0 14 3 24 #"start-distributed-search"
+0 0 24 3 1 #" "
+0 0 14 3 7 #"*start*"
+0 0 24 3 3 #")))"
+0 0 24 29 1 #"\n"
+0 0 24 3 2 #"  "
+0 0 17 3 2 #"#|"
+0 0 17 29 1 #"\n"
+0 0 17 3 100
+(
+ #"  (define search-result (time (cfs-file (make-fringe-from-files \"fr"
+ #"inge-segment-d142-\" 12 \"/space/bi"
+) 0 0 17 3 21 #"gspace/fringefiles/\")"
+0 0 17 29 1 #"\n"
+0 0 17 3 121
+(
+ #"                                        (make-fringe-from-files \"fr"
+ #"inge-segment-d143-\" 12 \"/space/bigspace/fringefiles/\")"
+) 0 0 17 29 1 #"\n"
+0 0 17 3 46 #"                                        144)))"
+0 0 17 29 1 #"\n"
+0 0 17 3 4 #"  |#"
+0 0 24 29 1 #"\n"
+0 0 24 3 2 #"  "
+0 0 17 3 2 #"#|"
+0 0 17 29 1 #"\n"
+0 0 17 3 103
+(
+ #"  (define search-result (time (cfs-file (make-fringe-from-files \"fr"
+ #"inge-segment-d29-\" 4 \"fringefiles/\")"
+) 0 0 17 29 1 #"\n"
+0 0 17 3 103
+(
+ #"                                        (make-fringe-from-files \"fr"
+ #"inge-segment-d30-\" 4 \"fringefiles/\")"
+) 0 0 17 29 1 #"\n"
+0 0 17 3 45 #"                                        31)))"
+0 0 17 29 1 #"\n"
+0 0 17 3 4 #"  |#"
+0 0 24 29 1 #"\n"
+0 0 24 3 2 #"  "
+0 0 17 3 2 #"#|"
+0 0 17 29 1 #"\n"
+0 0 17 3 69
+(
+ #"  (define search-result (time (cfs-file (make-fringe-from-file \"c12"
+ #"d5"
+) 0 0 17 3 39 #"9fringe\" \"fill-in-path-to-fringe-file\")"
+0 0 17 29 1 #"\n"
+0 0 17 3 108
+(
+ #"                                        (make-fringe-from-file \"c12"
+ #"d58fringe\" \"fill-in-path-to-fringe-file\")"
+) 0 0 17 29 1 #"\n"
+0 0 17 3 44 #"                                        1)))"
+0 0 17 29 1 #"\n"
+0 0 17 3 4 #"  |#"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  ("
+0 0 14 3 5 #"print"
+0 0 24 3 1 #" "
+0 0 14 3 13 #"search-result"
+0 0 24 3 1 #")"
+0 0 24 29 1 #"\n"
+0 0 24 3 3 #"  )"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0 0 17 3 32 #";(time (start-distributed-search"
+0 0 17 3 10 #" *start*))"
+0 0 24 29 1 #"\n"
+0 0 24 29 1 #"\n"
+0           0
