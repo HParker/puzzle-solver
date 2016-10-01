@@ -330,7 +330,7 @@
 ;; trigger the distributed expansion according to the given ranges
 ;; In theory, it shouldn't matter where the files pointed to by the fringe are located.
 (define (remote-expand-fringe ranges pf cf depth workers)
-  (printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) (map (lambda (pr) (- (second pr) (first pr))) ranges))
+  ;(printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) (map (lambda (pr) (- (second pr) (first pr))) ranges))
   (let* ([just-start-things (for ([range-pair (in-list ranges)]
                                   [i (in-range (length ranges))]
                                   [w workers])
@@ -338,11 +338,11 @@
                               (place-channel-put w (list range-pair i pf cf depth))
                               ;(remote-expand-part-fringe range-pair i pf cf depth)
                               )]
-         [pmsg1 (printf "kicked off the expand-slice at the places~%")]
+         ;[pmsg1 (printf "kicked off the expand-slice at the places~%")]
          [distrib-results (for/list ([range ranges]
                                      [w workers])
                             (place-channel-get w))])
-    (printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
+    ;(printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
     distrib-results))
 
 
@@ -470,7 +470,7 @@
 ;; given prev and current-fringes and the present depth, expand and merge the current fringe,
 ;; returning the fringe-spec of the newly expanded and merged fringe.
 (define (distributed-expand-fringe pf cf depth workers)
-  #|(printf "distributed-expand-fringe: at depth ~a, pf-spec: ~a; cf-spec: ~a~%" 
+  #|(printf "distributed-expand-fringe: at depth ~a, pf-definespec: ~a; cf-spec: ~a~%" 
           depth pf-spec cf-spec)|#
   (let* (;; EXPAND
          [start-expand (current-seconds)]
@@ -479,7 +479,7 @@
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         ;[pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
@@ -496,7 +496,7 @@
                                                  *share-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
-         [pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
+         ;[pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
          [sorted-segment-fspecs 
           (remote-merge (if (= (length ranges) *num-fringe-slices*)
                             ranges

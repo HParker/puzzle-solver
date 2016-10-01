@@ -11,6 +11,8 @@
          ;"stp-worker.rkt"
          )
 
+;(provide main)
+
 (define *diy-threshold* 5000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
 (define *level-start-time* 0)
 (define WORKERS null)
@@ -78,15 +80,17 @@
     (place-channel-put a-worker-place i)
     a-worker-place))
 
-;; init-workers: -> (listof worker-places)
+;; init-workers!: -> (listof worker-places)
 ;; initiate the remote-nodes and places, get the workers to load the spaceindex, etc.
 ;; first try hard-coding four workers on localhost 
-(define (init-workers)
-  (for/list ([i (in-range 4)])
-    (init-worker i)))
+(define (init-workers!)
+  (set! WORKERS
+        (for/list ([i (in-range 4)])
+          (init-worker i))))
 
-(define (main)
-  (set! WORKERS (init-workers))
+(module+ main
+  ;(set! WORKERS (init-workers))
+  (init-workers!)
   (define search-result (time (start-distributed-search *start*)))
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d142-" 12 "/space/bigspace/fringefiles/")

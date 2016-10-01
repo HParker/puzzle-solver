@@ -3,6 +3,7 @@ fringefiles/fringe-segment*
 fringefiles/fringe-d*
 stpconfigs/*.rkt
 savefringes/
+riottest/
 
 # Emacs or Racket backup files
 *~
