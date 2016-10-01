@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require (planet gcr/riot))
+;(require (planet gcr/riot))
 ;(require (planet soegaard/gzip:2:2))
 ;(require file/gzip)
 ;(require file/gunzip)
@@ -11,6 +11,7 @@
          racket/set
          data/heap
          ;rnrs/sorting-6
+         racket/place
          )
 
 (require "stpconfigs/configenv.rkt"
@@ -26,7 +27,9 @@
 
 (provide *found-goal*
          expand-fringe-self
-         distributed-expand-fringe)
+         distributed-expand-fringe
+         remote-expand-part-fringe
+         distributed-merge-proto-fringe-slices)
 
 
 (define *found-goal* #f)
@@ -323,17 +326,23 @@
                   dupes-caught-here sort-time write-time (- (current-milliseconds) expand-part-time))))
 
 
-;; remote-expand-fringe: (listof (list fixnum fixnum)) fringe fringe int -> (listof sampling-stat)
+;; remote-expand-fringe: (listof (list fixnum fixnum)) fringe fringe int (vectorof places) -> (listof sampling-stat)
 ;; trigger the distributed expansion according to the given ranges
 ;; In theory, it shouldn't matter where the files pointed to by the fringe are located.
-(define (remote-expand-fringe ranges pf cf depth)
-  ;;(printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" cur-fringe-size (map (lambda (pr) (- (second pr) (first pr))) ranges))
-  (let* ([distrib-results (for/work ([range-pair (in-list ranges)]
-                                     [i (in-range (length ranges))])
-                                    (when (> depth *max-depth*) (error 'distributed-expand-fringe "ran off end")) ;;prevent riot cache-failure
-                                    (remote-expand-part-fringe range-pair i pf cf depth)
-                                    )])
-    ;(printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
+(define (remote-expand-fringe ranges pf cf depth workers)
+  (printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) (map (lambda (pr) (- (second pr) (first pr))) ranges))
+  (let* ([just-start-things (for ([range-pair (in-list ranges)]
+                                  [i (in-range (length ranges))]
+                                  [w workers])
+                              (place-channel-put w 'expand-slice)
+                              (place-channel-put w (list range-pair i pf cf depth))
+                              ;(remote-expand-part-fringe range-pair i pf cf depth)
+                              )]
+         [pmsg1 (printf "kicked off the expand-slice at the places~%")]
+         [distrib-results (for/list ([range ranges]
+                                     [w workers])
+                            (place-channel-get w))])
+    (printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
     distrib-results))
 
 
@@ -421,29 +430,29 @@
         (delete-file (filespec-fullpathname fspc)))) ; *** but revisit when we reduce work packet size for load balancing
     (list ofile-name segment-size)))
 
-;; remote-merge: (listof (list number number)) (vectorof (vectorof fspec)) int fringe fringe -> (listof string int)
+;; remote-merge: (listof (list number number)) (vectorof (vectorof fspec)) int fringe fringe (vectorof place) -> (listof (list string int))
 ;; merge the proto-fringes from the workers and, depending on value of *late-dulicate-removal*, 
 ;; remove duplicate positions appearing in either prev- or current-fringes at the same time.
 ;; ranges is a list of pairs for position indices to be covered by the corresponding slice
 ;; expand-files-specs (proto-fringe-specs) is vector of vector of filespecs, the top-level has one for each slice,
 ;; each one containing as many proto-fringes as expanders, all of which need to be merged
-(define (remote-merge ranges expand-files-specs depth pf cf)
+(define (remote-merge ranges expand-files-specs depth pf cf workers)
   (unless (= (length ranges) (vector-length expand-files-specs) *num-fringe-slices*)
     (error 'remote-merge "mis-match between ranges, expand-files-specs, and/or *num-fringe-slices*"))
   ;; print the merging fringe work to be done
   (printf "remote-merge: fringe-slice proto-sizes prior to merging at depth ~a: ~a~%" depth 
           (for/list ([expand-fspecs-slice (in-vector expand-files-specs)])
             (for/sum ([fspec expand-fspecs-slice]) (filespec-pcount fspec))))
-  (let ([merge-results
-         (for/work ([i (in-range *num-fringe-slices*)]
-                    [range ranges]
-                    [expand-fspecs-slice (in-vector expand-files-specs)])
-                   (when (> depth *max-depth*) (error 'distributed-expand-fringe "ran off end")) ;finesse Riot caching
-                   (let* ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))]
-                          [merged-fname-and-resp-rng-size (distributed-merge-proto-fringe-slices range expand-fspecs-slice depth ofile-name pf cf i)]
-                          )
-                     ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)
-                     merged-fname-and-resp-rng-size))])
+  (let* ([just-start-things (for ([i (in-range *num-fringe-slices*)]
+                                  [range ranges]
+                                  [expand-fspecs-slice (in-vector expand-files-specs)]
+                                  [w workers])
+                              (let ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))])
+                                (place-channel-put w 'merge-slices)
+                                (place-channel-put w (list range expand-fspecs-slice depth ofile-name pf cf i))))]
+         [merge-results (for/list ([w workers])
+                          (place-channel-get w))])
+    ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)    
     ;; print the sizes of the merged fringe-slices
     (printf "remote-merge: fringe-slice sizes after merging at depth ~a: ~a~%" depth (map second merge-results))
     (printf "remote-merge: fringe-slice duplicate removal at depth ~a: ~a~%" depth
@@ -456,11 +465,11 @@
 ;; ------------------------------------------------------------------------------------------
 ;; DISTRIBUTED EXPAND AND MERGE
 
-;; distributed-expand-fringe: fringe fringe int -> (list string int int)
+;; distributed-expand-fringe: fringe fringe int (vectorof places) -> (list string int int)
 ;; Distributed version of expand-fringe
 ;; given prev and current-fringes and the present depth, expand and merge the current fringe,
 ;; returning the fringe-spec of the newly expanded and merged fringe.
-(define (distributed-expand-fringe pf cf depth)
+(define (distributed-expand-fringe pf cf depth workers)
   #|(printf "distributed-expand-fringe: at depth ~a, pf-spec: ~a; cf-spec: ~a~%" 
           depth pf-spec cf-spec)|#
   (let* (;; EXPAND
@@ -470,7 +479,8 @@
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         [sampling-stats (remote-expand-fringe ranges pf cf depth)]
+         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
          [check-for-goal (for/first ([ss (in-list sampling-stats)]
@@ -486,11 +496,12 @@
                                                  *share-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
+         [pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
          [sorted-segment-fspecs 
           (remote-merge (if (= (length ranges) *num-fringe-slices*)
                             ranges
                             (make-list *num-fringe-slices* (car ranges)))
-                        proto-fringe-fspecs depth pf cf)]
+                        proto-fringe-fspecs depth pf cf workers)]
          [merge-end (current-seconds)]
          ;; -------------------------------------------
          ;; delete previous fringe now that duplicates have been removed
