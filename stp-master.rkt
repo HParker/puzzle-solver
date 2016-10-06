@@ -1,7 +1,8 @@
 #lang racket/base
 
-;(require (planet gcr/riot))
-(require racket/place
+(require racket/place/distributed
+         racket/place
+         racket/runtime-path
          "stpconfigs/configenv.rkt"
          "stp-init.rkt"
          "stp-solve-base.rkt"
@@ -11,11 +12,12 @@
          ;"stp-worker.rkt"
          )
 
-;(provide main)
-
 (define *diy-threshold* 5000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
 (define *level-start-time* 0)
-(define WORKERS null)
+(define *worker-nodes* null)
+(define *workers* null)
+(define-runtime-path *worker-path* "stp-worker.rkt")
+
 
 ;; expand-fringe: fringe fringe int -> fringe
 ;; Given the prev- and current-fringes, and the current depth of search,
@@ -25,7 +27,7 @@
       ;; do it myself
       (expand-fringe-self prev-fringe current-fringe depth)
       ;; else call distributed-expand, which will farm out to workers
-      (distributed-expand-fringe prev-fringe current-fringe depth WORKERS)))
+      (distributed-expand-fringe prev-fringe current-fringe depth *workers*)))
 
 
 ;; cfs-file: fringe fringe int -> position
@@ -72,21 +74,36 @@
   (hc-position-bs *start*))
 
 
-;; init-worker: number -> worker-place
+;; init-worker: number remote-node -> worker-place
 ;; run on worker -- just cause the workers to load the spaceindex
-(define (init-worker i)
-  (let ([a-worker-place (dynamic-place "stp-worker.rkt" 'worker-main)])
+(define (init-worker i node)
+  (let ([a-worker-place (supervise-place-at node *worker-path* 'worker-main)])
     (place-channel-put a-worker-place 'init)
     (place-channel-put a-worker-place i)
+    (printf "here~%")
+    (printf "Initialized worker ~a as reported by worker purporting to be ~a~%" i (place-channel-get a-worker-place))
     a-worker-place))
 
 ;; init-workers!: -> (listof worker-places)
 ;; initiate the remote-nodes and places, get the workers to load the spaceindex, etc.
 ;; first try hard-coding four workers on localhost 
 (define (init-workers!)
-  (set! WORKERS
-        (for/list ([i (in-range 4)])
-          (init-worker i))))
+  ;#|
+  (set! *worker-nodes* (for/list ([host *worker-hosts*])
+                         (spawn-remote-racket-node host #:listen-port 6344)))
+  (set! *workers*
+        (for/fold ([wrkrs null])
+                  ([node *worker-nodes*])
+          (append (for/list ([i (in-range *workers-per-host*)])
+                    (init-worker i node)))))
+  ;|#
+  #|
+  (set! *workers*
+        (for/list ([i (in-range *workers-per-host*)])
+          (dynamic-place *worker-path* 'worker-main)))
+  |#
+  )
+
 
 (module+ main
   ;(set! WORKERS (init-workers))
@@ -108,6 +125,7 @@
                                         1)))
   |#
   (print search-result)
+  (for ([wn *worker-nodes*]) (node-send-exit wn))
   )
 
 ;(time (start-distributed-search *start*))

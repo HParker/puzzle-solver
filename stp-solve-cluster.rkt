@@ -37,8 +37,7 @@
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
 
-(define *worker-multiplier* 1)
-(define *num-fringe-slices* (* *n-processors* *worker-multiplier*))
+(define *num-fringe-slices* (* (length *worker-hosts*) *workers-per-host*))
 
 ;; define the fixed hash-code bounds to be used for repsonsibility ranges and proto-fringe slicing
 (define *fringe-slice-bounds* (compute-segment-bounds *num-fringe-slices*))
@@ -54,6 +53,42 @@
           [(< phc (vector-ref *fringe-slice-bounds* mid))
            (get-slice-num phc low mid)]
           [else (get-slice-num phc mid hi)])))
+
+;; make-vector-ranges: int -> (listof (list int int)
+;; create the pairs of indices into the current-fringe-vector that will specify the part of the fringe each worker tackles
+(define (make-vector-ranges vlength)
+  (if (< vlength 10)
+      (list (list 0 vlength))
+      (let ((start-list (build-list *num-fringe-slices*
+                                    (lambda (i) (floor (* i (/ vlength *num-fringe-slices*)))))))
+        (foldr (lambda (x r) (cons (list x (first (first r))) r)) 
+               (list (list (last start-list) vlength)) 
+               (drop-right start-list 1)))))
+
+;; dynamic-slice-ranges: (listof filespec) -> (listof (list int int))
+;; for when changing from one number of slices at one level to another number of slices at the next level
+;; ASSUMES that *num-fringe-slices* is an exact multiple of the number of slices in the given list-of-filespec
+(define (dynamic-slice-ranges lofspec) 
+  (let*-values ([(growth-factor) (quotient *num-fringe-slices* (length lofspec))]
+                [(ranges total-count)
+                 (for/fold ([res empty]
+                            [start 0])
+                   ([fs lofspec])
+                   (values (append res
+                                   (for/list ([i growth-factor]) (list (+ start (* i (/ 1 growth-factor) (filespec-pcount fs)))
+                                                                       (+ start (* (add1 i) (/ 1 growth-factor) (filespec-pcount fs))))))
+                           (+ start (filespec-pcount fs))))])
+    (printf "total-positions ~a and summed start count ~a and last slice pcount ~a~%"
+            (foldl + 0 (map filespec-pcount lofspec)) total-count (filespec-pcount (last lofspec)))
+    ranges))
+
+;; simple-ranges: (listof filespec) -> (listof (list int int)
+;; just use the fringe-segments
+(define (make-simple-ranges lofspec)
+  (let ([start-range 0])
+    (for/list ([fs (in-list lofspec)])
+      (set! start-range (+ start-range (filespec-pcount fs)))
+      (list (- start-range (filespec-pcount fs)) start-range))))
 
 
 ;;----------------------------------------------------------------------------------------
@@ -115,42 +150,6 @@
 ;; ---------------------------------------------------------------------------------------
 ;; EXPANSION .....
 
-;; make-vector-ranges: int -> (listof (list int int)
-;; create the pairs of indices into the current-fringe-vector that will specify the part of the fringe each worker tackles
-(define (make-vector-ranges vlength)
-  (if (< vlength 10)
-      (list (list 0 vlength))
-      (let ((start-list (build-list *num-fringe-slices*
-                                    (lambda (i) (floor (* i (/ vlength *num-fringe-slices*)))))))
-        (foldr (lambda (x r) (cons (list x (first (first r))) r)) 
-               (list (list (last start-list) vlength)) 
-               (drop-right start-list 1)))))
-
-;; dynamic-slice-ranges: (listof filespec) -> (listof (list int int))
-;; for when changing from one number of slices at one level to another number of slices at the next level
-;; ASSUMES that *num-fringe-slices* is an exact multiple of the number of slices in the given list-of-filespec
-(define (dynamic-slice-ranges lofspec) 
-  (let*-values ([(growth-factor) (quotient *num-fringe-slices* (length lofspec))]
-                [(ranges total-count)
-                 (for/fold ([res empty]
-                            [start 0])
-                   ([fs lofspec])
-                   (values (append res
-                                   (for/list ([i growth-factor]) (list (+ start (* i (/ 1 growth-factor) (filespec-pcount fs)))
-                                                                       (+ start (* (add1 i) (/ 1 growth-factor) (filespec-pcount fs))))))
-                           (+ start (filespec-pcount fs))))])
-    (printf "total-positions ~a and summed start count ~a and last slice pcount ~a~%"
-            (foldl + 0 (map filespec-pcount lofspec)) total-count (filespec-pcount (last lofspec)))
-    ranges))
-
-;; simple-ranges: (listof filespec) -> (listof (list int int)
-;; just use the fringe-segments
-(define (make-simple-ranges lofspec)
-  (let ([start-range 0])
-    (for/list ([fs (in-list lofspec)])
-      (set! start-range (+ start-range (filespec-pcount fs)))
-      (list (- start-range (filespec-pcount fs)) start-range))))
-
 ;; remove-dupes: fringe fringe (listof filespec) string int int float float float -> sampling-stat
 ;; Running in distributed worker processes:
 ;; Remove duplicate positions from the list of expand-fspec files (i.e., partial-expansion...),
@@ -196,7 +195,7 @@
                   other-expand-time)]
          [last-pos-bs #"NoLastPos"]
          )
-    ;; locally merge the pre-proto-fringes, removing duplicates from prev- and current-fringes
+    ;; locally merge the pre-proto-fringes, removing internal duplicates and maybe dupes found in prev- or current-fringes
     (for ([an-fhead (in-heap/consume! heap-o-fheads)])
       (let ([efpos (fringehead-next an-fhead)])
         (unless ;; efpos is a duplicate
@@ -207,9 +206,8 @@
                   (or (and (position-in-fhead? efpos pffh) (vector-set! sample-stats 1 (add1 (vector-ref sample-stats 1))))
                       (and (position-in-fhead? efpos cffh) (vector-set! sample-stats 1 (add1 (vector-ref sample-stats 1)))))))
           (set! last-pos-bs (hc-position-bs efpos))
-          (do ([efpos-hc (hc-position-hc efpos)])
+          (unless (< (hc-position-hc efpos) slice-upper-bound)
             ;; if efpos-hc is >= to the slice-upper-bound, advance the proto-slice-num/ofile/upper-bound until it is not
-            ((< efpos-hc slice-upper-bound))
             (close-output-port proto-slice-ofile)
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile
@@ -313,8 +311,7 @@
         (set! expansion-ptr 0))
       (advance-fhead! cffh)
       (set! expanded-phase1 (add1 expanded-phase1)))
-    #|(printf "remote-exp-part-fringe: PHASE 1: expanding ~a positions of assigned ~a~%" 
-            expanded-phase1 assignment-count);|#
+    ;(printf "remote-exp-part-fringe: PHASE 1: expanding ~a positions of assigned ~a~%" expanded-phase1 assignment-count)
     (when (< expanded-phase1 assignment-count)
       (error 'remote-expand-part-fringe
              (format "only expanded ~a of the assigned ~a (~a-~a) positions" expanded-phase1 assignment-count start end)))
@@ -330,7 +327,8 @@
 ;; trigger the distributed expansion according to the given ranges
 ;; In theory, it shouldn't matter where the files pointed to by the fringe are located.
 (define (remote-expand-fringe ranges pf cf depth workers)
-  ;(printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) (map (lambda (pr) (- (second pr) (first pr))) ranges))
+  (printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) ranges ;(map (lambda (pr) (- (second pr) (first pr))) ranges)
+          )
   (let* ([just-start-things (for ([range-pair (in-list ranges)]
                                   [i (in-range (length ranges))]
                                   [w workers])
@@ -338,8 +336,8 @@
                               (place-channel-put w (list range-pair i pf cf depth))
                               ;(remote-expand-part-fringe range-pair i pf cf depth)
                               )]
-         ;[pmsg1 (printf "kicked off the expand-slice at the places~%")]
-         [distrib-results (for/list ([range ranges]
+         [pmsg1 (printf "kicked off the expand-slice at the places~%")]
+         [distrib-results (for/list ([range (in-range (length ranges))]
                                      [w workers])
                             (place-channel-get w))])
     ;(printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
@@ -479,7 +477,7 @@
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         ;[pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
@@ -496,7 +494,7 @@
                                                  *share-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
-         ;[pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
+         [pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
          [sorted-segment-fspecs 
           (remote-merge (if (= (length ranges) *num-fringe-slices*)
                             ranges

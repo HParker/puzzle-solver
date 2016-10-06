@@ -1,10 +1,6 @@
 #lang racket
 
-(require racket/match
-         racket/place/define-remote-server
-         "stpconfigs/configenv.rkt"
-         "stp-init.rkt"
-         "stp-solve-cluster.rkt")
+(require "stp-solve-cluster.rkt")
 
 (provide worker-main)
 
@@ -40,7 +36,7 @@
 
 (define (worker-main pch)
   (case (place-channel-get pch)
-    [(init) (set! MYID (place-channel-get pch))]
+    [(init) (set! MYID (place-channel-get pch)) (place-channel-put pch MYID)]
     [(expand-slice) (place-channel-put pch (expand-slice (place-channel-get pch)))]
     [(merge-slices) (place-channel-put pch (merge-slices (place-channel-get pch)))]
     [else (error 'worker-main "unknown message")])
