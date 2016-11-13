@@ -4,7 +4,8 @@
          racket/vector
          racket/port
          racket/file
-         racket/format)
+         racket/format
+         racket/system)
 
 (require 
   ;racket/generator
@@ -237,7 +238,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                (fringe-pcount f)))
 
 ;; copy-fringe: fringe string -> fringe
-;; copy the files in the given fringe to the target, returning a new fringe
+;; copy the files in the given fringe to the target location on the same filesystem, returning a new fringe
 (define (copy-fringe f target)
   (make-fringe target
                (for/list ([fspec (in-list (fringe-segments f))])
@@ -246,6 +247,15 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                      (copy-file (filespec-fullpathname fspec) remote-name))
                    (rebase-filespec fspec target)))
                (fringe-pcount f)))
+
+;; distribute-fringe: fringe (listof string) -> void
+;; distribute the fringe's segments to the given hosts unless the target host is the same as the master
+(define (distribute-fringe f hosts)
+  (for ([seg (fringe-segments f)]
+        [h hosts]
+        #:unless (string=? h *master-name*)
+        )
+    (system (format "scp ~a ~a:~a" (filespec-fullpathname seg) h *local-store*))))
                  
 ;; resegment-fringe: fringe number string -> symbol
 ;; given a fringe, redistribute it over the given number of segments

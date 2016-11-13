@@ -17,7 +17,7 @@
 (define *diy-threshold* 5000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
 (define *level-start-time* 0)
 (define *worker-nodes* null)
-(define *workers* null)
+(define *workers* null) ;; list-of worker structs
 (define-runtime-path *worker-path* "stp-solve-cluster.rkt")
 
 
@@ -131,9 +131,12 @@
                          (spawn-remote-racket-node host #:listen-port 6344)))
   (set! *workers*
         (for/fold ([wrkrs null])
-                  ([node *worker-nodes*])
-          (append (for/list ([i (in-range *workers-per-host*)])
-                    (init-worker i node)))))
+                  ([node *worker-nodes*]
+                   [host *worker-hosts*]
+                   [idbase (in-range 0 (* (length *worker-hosts*) *workers-per-host*) 2)])
+          (append wrkrs
+                  (for/list ([i (in-range *workers-per-host*)])
+                    (worker host (+ idbase i) (init-worker (+ idbase i) node))))))
   ;|#
   #|
   (set! *workers*
@@ -163,8 +166,6 @@
                                         1)))
   |#
   (print search-result)
-  (for ([p *workers*]) (place-channel-put p 'quit))
-  (map place-wait *workers*)
   (for ([wn *worker-nodes*]) (node-send-exit wn))
   )
 

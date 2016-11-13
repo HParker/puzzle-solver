@@ -113,7 +113,7 @@
 ;; ---------------------------------------------------------------------------------------
 ;; EXPANSION .....
 
-;; remove-dupes: fringe fringe (listof filespec) string int int float float float -> sampling-stat
+;; remove-dupes: fringe fringe (listof filespec) string int int float float float (listof worker) -> sampling-stat
 ;; Running in distributed worker processes:
 ;; Remove duplicate positions from the list of expand-fspec files (i.e., partial-expansion...),
 ;; for any positions that appear in multiple partial expansion files.
@@ -122,7 +122,7 @@
 ;; and later delivered a copy to the working directory to share with all the other compute-nodes;
 ;; Try writing directly to the shared NFS drive as a way to spread out network traffic.  This will clean up file name in the return sampling-stat...
 ;; Accordingly, the sampling-stat return value has a filename pointing to the working directory.
-(define (remove-dupes pf cf lo-expand-fspec ofile-name depth partial-exp-dupes part-sort-time part-write-time other-expand-time)
+(define (remove-dupes pf cf lo-expand-fspec ofile-name depth partial-exp-dupes part-sort-time part-write-time other-expand-time workers)
   ;; the ofile-name is just the file-name -- no *local-store* path where needed
   #|(printf "EXPAND PHASE 2 (REMOVE DUPLICATES) pf: ~a~%cf: ~a~%all of lo-expand-fspec: ~a~%ofile-name: ~a~%depth: ~a~%"
           pf cf lo-expand-fspec ofile-name depth);|#
@@ -134,8 +134,6 @@
          [heap-o-fheads (let ([lheap (make-heap (lambda (fh1 fh2) (hcposition<? (fringehead-next fh1) (fringehead-next fh2))))])
                           (heap-add-all! lheap lo-effh)
                           lheap)]
-         ; writing directly to NFS doesn't seem any slower than *local-store* and then copy
-         ; this seems to be the case because write to one slice-ofile at a time, since everything is sorted
          [proto-slice-num 0]
          [slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))]
          [proto-slice-ofile 
@@ -236,11 +234,11 @@
             (+ sort-time sort-time0)
             (+ write-time write-time0))))
 
-;; remote-expand-part-fringe: (list int int) int fringe fringe int -> {whatever returned by remove-dupes}
+;; remote-expand-part-fringe: (list int int) int fringe fringe int (listof worker) -> {whatever returned by remove-dupes}
 ;; given a pair of indices into the current-fringe that should be expanded by this process, a process-id,
 ;; and the prev- and current-fringes, and the depth ...
 ;; expand the positions in the indices range, ignoring duplicates other than within the new fringe being constructed.
-(define (remote-expand-part-fringe ipair process-id pf cf depth)
+(define (remote-expand-part-fringe ipair process-id pf cf depth workers)
   ;; prev-fringe spec points to default shared directory; current-fringe spec points to *local-store* folder
   ;(printf "remote-expand-part-fringe: starting with pf: ~a, and cf: ~a~%" pf cf)
   ;; EXPAND PHASE 1
@@ -283,7 +281,7 @@
     (remove-dupes pf cf pre-ofiles 
                   (format "proto-fringe-d~a-~a" depth (~a process-id #:left-pad-string "0" #:width 3 #:align 'right)) ;; ofile-name
                   depth
-                  dupes-caught-here sort-time write-time (- (current-milliseconds) expand-part-time))))
+                  dupes-caught-here sort-time write-time (- (current-milliseconds) expand-part-time) workers)))
 
 
 ;; remote-expand-fringe: (listof (list fixnum fixnum)) fringe fringe int (vectorof places) -> (listof sampling-stat)
@@ -292,15 +290,22 @@
 (define (remote-expand-fringe ranges pf cf depth workers)
   (printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) ranges ;(map (lambda (pr) (- (second pr) (first pr))) ranges)
           )
+  ;; --- Distribute fringes (if necessary) ---------------------------
+  ;; NEED TO (MAYBE) DISTRIBUTE FRINGE SEGMENTS TO RESPECTIVE WORKERS
+  (if (= (length (fringe-segments cf)) (length workers))
+      (begin (distribute-fringe cf (map worker-host workers))
+             (distribute-fringe pf (map worker-host workers)))
+      'never-mind)
+  ;; Now initiate the actual expansions
   (let* ([just-start-things (for ([range-pair (in-list ranges)]
                                   [i (in-range (length ranges))]
-                                  [w workers])
-                              (stp-worker-expand-slice w (list range-pair i pf cf depth))
+                                  [w (map worker-place workers)])
+                              (stp-worker-expand-slice w (list range-pair i pf cf depth workers))
                               ;(remote-expand-part-fringe range-pair i pf cf depth)
                               )]
          [pmsg1 (printf "kicked off the expand-slice at the places~%")]
          [distrib-results (for/list ([range (in-range (length ranges))]
-                                     [w workers])
+                                     [w (map worker-place workers)])
                             (stp-worker-get-expand-results w)
                             )])
     ;(printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
@@ -407,10 +412,10 @@
   (let* ([just-start-things (for ([i (in-range *num-fringe-slices*)]
                                   [range ranges]
                                   [expand-fspecs-slice (in-vector expand-files-specs)]
-                                  [w workers])
+                                  [w (map worker-place workers)])
                               (let ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))])
                                 (stp-worker-merge-slices w (list range expand-fspecs-slice depth ofile-name pf cf i))))]
-         [merge-results (for/list ([w workers])
+         [merge-results (for/list ([w (map worker-place workers)])
                           (stp-worker-get-merge-results w))])
     ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)    
     ;; print the sizes of the merged fringe-slices
@@ -425,7 +430,7 @@
 ;; ------------------------------------------------------------------------------------------
 ;; DISTRIBUTED EXPAND AND MERGE
 
-;; distributed-expand-fringe: fringe fringe int (vectorof places) -> (list string int int)
+;; distributed-expand-fringe: fringe fringe int (listof worker) -> (list string int int)
 ;; Distributed version of expand-fringe
 ;; given prev and current-fringes and the present depth, expand and merge the current fringe,
 ;; returning the fringe-spec of the newly expanded and merged fringe.
@@ -559,8 +564,9 @@
           [i (second args)]
           [pf (third args)]
           [cf (fourth args)]
-          [depth (fifth args)])
-      (set! expand-results (remote-expand-part-fringe range-pair i pf cf depth))
+          [depth (fifth args)]
+          [workers (sixth args)])
+      (set! expand-results (remote-expand-part-fringe range-pair i pf cf depth workers))
       (set! ready #t)
       ))
 

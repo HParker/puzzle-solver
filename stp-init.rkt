@@ -8,7 +8,8 @@
 
 (require "stpconfigs/configenv.rkt")
 
-(provide *most-positive-fixnum*
+(provide (struct-out worker)
+         *most-positive-fixnum*
          *most-negative-fixnum*
          EXPAND-SPACE-SIZE
          (struct-out hc-position)
@@ -42,6 +43,8 @@
          climb15-init
          climbpro24-init)
 
+;; a worker is a struct: (worker h n p) where h is a hostname string, n is a numeric id, and p is a place connection
+(struct worker (host id place) #:transparent)
 
 (define *most-positive-fixnum* 0)
 (define *most-negative-fixnum* 0)
