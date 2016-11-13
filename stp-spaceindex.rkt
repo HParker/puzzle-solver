@@ -12,7 +12,13 @@
  "stp-solve-base.rkt"
  )
 
-(provide (all-defined-out))
+(provide ;(all-defined-out)
+ rcpair->rcbyte
+ canonize
+ expand*
+         )
+
+(current-directory *stp-home-path*)
 
 (define *spaceindex* "the hashtable to hold the possible moves indexed by space configurations")
 (define ret-false (lambda () #f))
@@ -50,6 +56,7 @@
 (define *rcpair-to-rcbyte*
   (make-array (shape -2 (+ *bh* 4) (- *bw*) (add1 *bw*))))
 (define *rcbyte-to-rcpair* (vector))
+
 (define (compile-transitions)
   (for* ([r (in-range -2 (+ *bh* 4))]
          [c (in-range (- *bw*) (add1 *bw*))])
@@ -139,18 +146,33 @@
 ;; compile-spaceindex: string -> void
 ;; read or, if not present, initialize-and-write the *spaceindex* hashtable from or to the given file
 (define (compile-spaceindex fname)
-  (unless (hash? *spaceindex*)
-    (set! *spaceindex* 
-          (cond [(file-exists? (string-append "/state/partition1/stpconfigs/" fname))
-                 (with-input-from-file (string-append "/state/partition1/stpconfigs/" fname) read)]
-                [(file-exists? (string-append "stpconfigs/" fname))
-                 (with-input-from-file (string-append "stpconfigs/" fname) read)]
-                [else
-                 (let ([ht (make-hash)]) ; mutable hash-table of possible moves indexed by space configuration
-                   (compile-ms-array! *piece-types* *bh* *bw*)
-                   (all-space-config ht)
-                   (with-output-to-file (string-append "stpconfigs/" fname) (lambda () (write ht)))
-                   ht)]))))
+  (with-output-to-file "compspaceindex.log"
+    (lambda ()
+      (printf "Inside compile-spaceindex ready to start~%")
+      (unless (hash? *spaceindex*)
+        (printf "Inside the unless~%")(flush-output)
+        ;(error 'compile-spaceindex "force error to check for output")
+        (set! *spaceindex* 
+              (cond [(file-exists? (string-append "/state/partition1/stpconfigs/" fname))
+                     (printf "Didn't expect to be here with file in /state/partition1...~%")
+                     (with-input-from-file (string-append "/state/partition1/stpconfigs/" fname) read)]
+                    [(file-exists? (string-append "stpconfigs/" fname))
+                     (printf "The indirect require from a worker should find spaceindex in stpconfigs/puzzle-name-spaceindex...~%")
+                     (let ([newspaceindex (with-input-from-file (string-append "stpconfigs/" fname) read)])
+                       (printf "Finished reading spaceindex file~%")
+                       newspaceindex)]
+                    [else
+                     (printf "The require from stp-master should be creating a new space index...~%")
+                     (let ([ht (make-hash)]) ; mutable hash-table of possible moves indexed by space configuration
+                       (printf "calling compile-ms-array!~%")
+                       (compile-ms-array! *piece-types* *bh* *bw*)
+                       (printf "calling all-space-config~%")
+                       (all-space-config ht)
+                       (printf "about to write the spaceindex to file~%")
+                       (with-output-to-file (string-append "stpconfigs/" fname) (lambda () (write ht)))
+                       ht)])))
+      (printf "done with compile-spaceindex~%") (flush-output))
+    #:exists 'append))
 
 ;; all-space-config: (hash-table: spaceint (vectorof EBMS)) -> void
 ;; populates the hash of possible moves for indexed by all possible configurations of blanks

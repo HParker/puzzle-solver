@@ -12,6 +12,7 @@
          data/heap
          ;rnrs/sorting-6
          racket/place
+         racket/place/define-remote-server
          )
 
 (require "stpconfigs/configenv.rkt"
@@ -26,19 +27,18 @@
 ;(profiling-enabled #t)
 
 (provide *found-goal*
-         expand-fringe-self
          distributed-expand-fringe
          remote-expand-part-fringe
          distributed-merge-proto-fringe-slices)
 
+;(current-directory *stp-home-path*)
 
 (define *found-goal* #f)
 
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
 
-(define *worker-multiplier* 1)
-(define *num-fringe-slices* (* *n-processors* *worker-multiplier*))
+(define *num-fringe-slices* (* (length *worker-hosts*) *workers-per-host*))
 
 ;; define the fixed hash-code bounds to be used for repsonsibility ranges and proto-fringe slicing
 (define *fringe-slice-bounds* (compute-segment-bounds *num-fringe-slices*))
@@ -54,66 +54,6 @@
           [(< phc (vector-ref *fringe-slice-bounds* mid))
            (get-slice-num phc low mid)]
           [else (get-slice-num phc mid hi)])))
-
-
-;;----------------------------------------------------------------------------------------
-
-;; expand-fringe-self: fringe fringe int -> fringe
-;; expand just the current-fringe and remove duplicates in the expansion and repeats from prev-fringe
-;; returning the new fringe
-(define (expand-fringe-self pf cf depth)
-  (let* ([prev-fringe-set (for/fold ([the-fringe (set)])
-                            ([sgmnt (fringe-segments pf)])
-                            (set-union the-fringe
-                                       (list->set (read-fringe-from-file (filespec-fullpathname sgmnt)))))] ; pf- and cf-spec's in expand-fringe-self should have empty fbase
-         [current-fringe-vec 
-          (list->vector (for/fold ([the-fringe empty])
-                          ([sgmnt (reverse (fringe-segments cf))])
-                          (append (read-fringe-from-file (filespec-fullpathname sgmnt)) the-fringe)))]
-         [new-cf-name (format "fringe-d~a" depth)]
-         [new-cf-fullpath (format "~a~a" *share-store* new-cf-name)]
-         ;[prntmsg (printf "finished reading the fringes~%")]
-         [exp-ptr 0]
-         [expand-them (for ([p-to-expand current-fringe-vec])
-                        (set! exp-ptr (expand* p-to-expand exp-ptr)))]
-         [res (set->list (for/set ([i exp-ptr]
-                                   #:unless (or (set-member? prev-fringe-set (vector-ref *expansion-space* i))
-                                                (position-in-vec? current-fringe-vec (vector-ref *expansion-space* i))))
-                           (when (is-goal? (vector-ref *expansion-space* i)) (set! *found-goal* (vector-ref *expansion-space* i)))
-                           (vector-ref *expansion-space* i)))]
-         )
-    #|(printf "Finished the work packet generating a set of ~a positions~%" (set-count res))
-    (for ([p res])
-      (printf "pos: ~a~%~a~%" (stringify p) p))|#
-    (unless *preserve-prior-fringes*
-      (for ([sgmnt (fringe-segments pf)]) (delete-file (filespec-fullpathname sgmnt))))
-    (write-fringe-to-disk (list->vector (sort res hcposition<?)) new-cf-fullpath)
-    (make-fringe *share-store*
-                 (list (make-filespec new-cf-name (length res) (file-size new-cf-fullpath) *share-store*))
-                 (length res))))
-
-
-
-;;----------------------------------------------------------------------------------------
-;; DISTRIBUTED EXPANSION AND MERGING OF FRINGES
-
-;; a sampling-stat is a (vector int fixnum fixnum (vectorof fixnum) boolean string (vectorof int) int int real real)
-;; where the elements are:s
-;; 0. total number of duplicate-free positions summed over slices
-;; 1. number of positions discarded because duplicate with current or prev-fringes
-;; 2. number of positions discarded because duplicate with other partial-expansion file
-;; 3. vector of numbers counting duplicate-free positions in each respective slice (provide pcount if needed for fspec)
-;; 4. boolean goal-found if found when expanding the assigned positions
-;; 5. output file name prefix, e.g., proto-fringe-dXX-NN, without slice id which is assumed to be added when needed
-;; 6. vector of slice file sizes
-;; 7. total number of positions processed to give rise to duplicate free positions in index 0
-;; 8. number of duplicate positions eliminated while generating the partial-expansions
-;; 9. cumulative sort-time from partial-expansion files phase1
-;; 10. cumulative write-time from partial-expansion files phase1
-;; 11. other-expand-time (i.e., non-sort and write, or basically the successor-generation)
-
-;; ---------------------------------------------------------------------------------------
-;; EXPANSION .....
 
 ;; make-vector-ranges: int -> (listof (list int int)
 ;; create the pairs of indices into the current-fringe-vector that will specify the part of the fringe each worker tackles
@@ -150,6 +90,28 @@
     (for/list ([fs (in-list lofspec)])
       (set! start-range (+ start-range (filespec-pcount fs)))
       (list (- start-range (filespec-pcount fs)) start-range))))
+
+
+;;----------------------------------------------------------------------------------------
+;; DISTRIBUTED EXPANSION AND MERGING OF FRINGES
+
+;; a sampling-stat is a (vector int fixnum fixnum (vectorof fixnum) boolean string (vectorof int) int int real real)
+;; where the elements are:s
+;; 0. total number of duplicate-free positions summed over slices
+;; 1. number of positions discarded because duplicate with current or prev-fringes
+;; 2. number of positions discarded because duplicate with other partial-expansion file
+;; 3. vector of numbers counting duplicate-free positions in each respective slice (provide pcount if needed for fspec)
+;; 4. boolean goal-found if found when expanding the assigned positions
+;; 5. output file name prefix, e.g., proto-fringe-dXX-NN, without slice id which is assumed to be added when needed
+;; 6. vector of slice file sizes
+;; 7. total number of positions processed to give rise to duplicate free positions in index 0
+;; 8. number of duplicate positions eliminated while generating the partial-expansions
+;; 9. cumulative sort-time from partial-expansion files phase1
+;; 10. cumulative write-time from partial-expansion files phase1
+;; 11. other-expand-time (i.e., non-sort and write, or basically the successor-generation)
+
+;; ---------------------------------------------------------------------------------------
+;; EXPANSION .....
 
 ;; remove-dupes: fringe fringe (listof filespec) string int int float float float -> sampling-stat
 ;; Running in distributed worker processes:
@@ -196,7 +158,7 @@
                   other-expand-time)]
          [last-pos-bs #"NoLastPos"]
          )
-    ;; locally merge the pre-proto-fringes, removing duplicates from prev- and current-fringes
+    ;; locally merge the pre-proto-fringes, removing internal duplicates and maybe dupes found in prev- or current-fringes
     (for ([an-fhead (in-heap/consume! heap-o-fheads)])
       (let ([efpos (fringehead-next an-fhead)])
         (unless ;; efpos is a duplicate
@@ -207,9 +169,8 @@
                   (or (and (position-in-fhead? efpos pffh) (vector-set! sample-stats 1 (add1 (vector-ref sample-stats 1))))
                       (and (position-in-fhead? efpos cffh) (vector-set! sample-stats 1 (add1 (vector-ref sample-stats 1)))))))
           (set! last-pos-bs (hc-position-bs efpos))
-          (do ([efpos-hc (hc-position-hc efpos)])
+          (unless (< (hc-position-hc efpos) slice-upper-bound)
             ;; if efpos-hc is >= to the slice-upper-bound, advance the proto-slice-num/ofile/upper-bound until it is not
-            ((< efpos-hc slice-upper-bound))
             (close-output-port proto-slice-ofile)
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile
@@ -313,8 +274,7 @@
         (set! expansion-ptr 0))
       (advance-fhead! cffh)
       (set! expanded-phase1 (add1 expanded-phase1)))
-    #|(printf "remote-exp-part-fringe: PHASE 1: expanding ~a positions of assigned ~a~%" 
-            expanded-phase1 assignment-count);|#
+    ;(printf "remote-exp-part-fringe: PHASE 1: expanding ~a positions of assigned ~a~%" expanded-phase1 assignment-count)
     (when (< expanded-phase1 assignment-count)
       (error 'remote-expand-part-fringe
              (format "only expanded ~a of the assigned ~a (~a-~a) positions" expanded-phase1 assignment-count start end)))
@@ -330,18 +290,19 @@
 ;; trigger the distributed expansion according to the given ranges
 ;; In theory, it shouldn't matter where the files pointed to by the fringe are located.
 (define (remote-expand-fringe ranges pf cf depth workers)
-  ;(printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) (map (lambda (pr) (- (second pr) (first pr))) ranges))
+  (printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) ranges ;(map (lambda (pr) (- (second pr) (first pr))) ranges)
+          )
   (let* ([just-start-things (for ([range-pair (in-list ranges)]
                                   [i (in-range (length ranges))]
                                   [w workers])
-                              (place-channel-put w 'expand-slice)
-                              (place-channel-put w (list range-pair i pf cf depth))
+                              (stp-worker-expand-slice w (list range-pair i pf cf depth))
                               ;(remote-expand-part-fringe range-pair i pf cf depth)
                               )]
-         ;[pmsg1 (printf "kicked off the expand-slice at the places~%")]
-         [distrib-results (for/list ([range ranges]
+         [pmsg1 (printf "kicked off the expand-slice at the places~%")]
+         [distrib-results (for/list ([range (in-range (length ranges))]
                                      [w workers])
-                            (place-channel-get w))])
+                            (stp-worker-get-expand-results w)
+                            )])
     ;(printf "remote-expand-fringe: respective expansion counts: ~a~%" (map (lambda (ssv) (vector-ref ssv 0)) distrib-results))
     distrib-results))
 
@@ -448,10 +409,9 @@
                                   [expand-fspecs-slice (in-vector expand-files-specs)]
                                   [w workers])
                               (let ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))])
-                                (place-channel-put w 'merge-slices)
-                                (place-channel-put w (list range expand-fspecs-slice depth ofile-name pf cf i))))]
+                                (stp-worker-merge-slices w (list range expand-fspecs-slice depth ofile-name pf cf i))))]
          [merge-results (for/list ([w workers])
-                          (place-channel-get w))])
+                          (stp-worker-get-merge-results w))])
     ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)    
     ;; print the sizes of the merged fringe-slices
     (printf "remote-merge: fringe-slice sizes after merging at depth ~a: ~a~%" depth (map second merge-results))
@@ -479,7 +439,7 @@
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         ;[pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
@@ -496,7 +456,7 @@
                                                  *share-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
-         ;[pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
+         [pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
          [sorted-segment-fspecs 
           (remote-merge (if (= (length ranges) *num-fringe-slices*)
                             ranges
@@ -563,3 +523,57 @@
     ))
 
 
+;;----------- RPC-SERVER SECTION --------------
+
+;; the core of the remote worker that can do expansion and merging of responsibility ranges
+(define-remote-server stp-worker
+  (define-state MYID -1)
+  ;; flag for whether the worker is done with a task and has results available
+  (define-state ready #f)
+  ;; the results from either expand or merge, respectively
+  (define-state expand-results null)
+  (define-state merge-results null)
+
+  ;; initialize this worker's id
+  (define-cast (init id)
+    (set! MYID id))
+  ;; report this worker's id
+  (define-rpc (getid) MYID)
+
+  ;; get the results from expansion (assuming available)
+  (define-rpc (get-expand-results)
+    (if ready
+        expand-results
+        (error 'stp-worker-get-expand-results "attempt to get results prior to ready")))
+
+  ;; get the results from merging (assuming available)
+  (define-rpc (get-merge-results)
+    (if ready
+        merge-results
+        (error 'stp-worker-get-merge-results "attempt to get results prior to ready")))
+
+  ;; initiate the expansion of a responsibility-range (but do not wait for completion)
+  (define-cast (expand-slice args)
+    (set! ready #f)
+    (let ([range-pair (first args)]
+          [i (second args)]
+          [pf (third args)]
+          [cf (fourth args)]
+          [depth (fifth args)])
+      (set! expand-results (remote-expand-part-fringe range-pair i pf cf depth))
+      (set! ready #t)
+      ))
+
+  ;; initiate the merging of expansion results for this responsibility range (but do not wait)
+  (define-cast (merge-slices args)
+    (set! ready #f)
+    (let ([range (first args)]
+          [expand-fspecs-slice (second args)]
+          [depth (third args)]
+          [ofile-name (fourth args)]
+          [pf (fifth args)]
+          [cf (sixth args)]
+          [i (seventh args)])
+      (set! merge-results (distributed-merge-proto-fringe-slices range expand-fspecs-slice depth ofile-name pf cf i))
+      (set! ready #t)))
+  )

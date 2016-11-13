@@ -1,21 +1,60 @@
 #lang racket/base
 
-;(require (planet gcr/riot))
-(require racket/place
+(require racket/place/distributed
+         racket/place
+         racket/runtime-path
+         racket/list
+         racket/set
          "stpconfigs/configenv.rkt"
          "stp-init.rkt"
          "stp-solve-base.rkt"
          "stp-fringefilerep.rkt"
          "stp-spaceindex.rkt"
          "stp-solve-cluster.rkt"
-         ;"stp-worker.rkt"
          )
 
-;(provide main)
-
+(define *local-found-goal* #f)
 (define *diy-threshold* 5000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
 (define *level-start-time* 0)
-(define WORKERS null)
+(define *worker-nodes* null)
+(define *workers* null)
+(define-runtime-path *worker-path* "stp-solve-cluster.rkt")
+
+
+;; expand-fringe-self: fringe fringe int -> fringe
+;; within the master process, expand the current-fringe and remove duplicates in the expansion and repeats from prev-fringe
+;; returning the new fringe
+(define (expand-fringe-self pf cf depth)
+  (let* ([prev-fringe-set (for/fold ([the-fringe (set)])
+                            ([sgmnt (fringe-segments pf)])
+                            (set-union the-fringe
+                                       (list->set (read-fringe-from-file (filespec-fullpathname sgmnt)))))] ; pf- and cf-spec's in expand-fringe-self should have empty fbase
+         [current-fringe-vec 
+          (list->vector (for/fold ([the-fringe empty])
+                          ([sgmnt (reverse (fringe-segments cf))])
+                          (append (read-fringe-from-file (filespec-fullpathname sgmnt)) the-fringe)))]
+         [new-cf-name (format "fringe-d~a" depth)]
+         [new-cf-fullpath (format "~a~a" *share-store* new-cf-name)]
+         ;[prntmsg (printf "finished reading the fringes~%")]
+         [exp-ptr 0]
+         [expand-them (for ([p-to-expand current-fringe-vec])
+                        (set! exp-ptr (expand* p-to-expand exp-ptr)))]
+         [res (set->list (for/set ([i exp-ptr]
+                                   #:unless (or (set-member? prev-fringe-set (vector-ref *expansion-space* i))
+                                                (position-in-vec? current-fringe-vec (vector-ref *expansion-space* i))))
+                           (when (is-goal? (vector-ref *expansion-space* i)) (set! *local-found-goal* (vector-ref *expansion-space* i)))
+                           (vector-ref *expansion-space* i)))]
+         )
+    #|(printf "Finished the work packet generating a set of ~a positions~%" (set-count res))
+    (for ([p res])
+      (printf "pos: ~a~%~a~%" (stringify p) p))|#
+    (unless *preserve-prior-fringes*
+      (for ([sgmnt (fringe-segments pf)]) (delete-file (filespec-fullpathname sgmnt))))
+    (write-fringe-to-disk (list->vector (sort res hcposition<?)) new-cf-fullpath)
+    (make-fringe *share-store*
+                 (list (make-filespec new-cf-name (length res) (file-size new-cf-fullpath) *share-store*))
+                 (length res))))
+
 
 ;; expand-fringe: fringe fringe int -> fringe
 ;; Given the prev- and current-fringes, and the current depth of search,
@@ -25,7 +64,7 @@
       ;; do it myself
       (expand-fringe-self prev-fringe current-fringe depth)
       ;; else call distributed-expand, which will farm out to workers
-      (distributed-expand-fringe prev-fringe current-fringe depth WORKERS)))
+      (distributed-expand-fringe prev-fringe current-fringe depth *workers*)))
 
 
 ;; cfs-file: fringe fringe int -> position
@@ -34,9 +73,11 @@
 (define (cfs-file prev-fringe current-fringe depth)
   (set! *level-start-time* (current-seconds))
   (cond [(or (zero? (fringe-pcount current-fringe)) (> depth *max-depth*)) #f]
-        [*found-goal*
+        [(or *local-found-goal* *found-goal*)
          (print "found goal")
-         *found-goal*]
+         (if *local-found-goal*
+             *local-found-goal*
+             *found-goal*)]
         [else (let ([new-fringe (expand-fringe prev-fringe current-fringe depth)])
                 (printf "At depth ~a: current-fringe has ~a positions (and new-fringe ~a) in ~a (~a)~%" 
                         depth (fringe-pcount current-fringe) (fringe-pcount new-fringe)
@@ -61,7 +102,7 @@
               1)))
 
 ;(compile-ms-array! *piece-types* *bh* *bw*)
-(compile-spaceindex (format "~a-spaceindex.rkt" *puzzle-name*))
+;(compile-spaceindex (format "~a-spaceindex.rkt" *puzzle-name*))
 
 ;; canonicalize the *start* blank-configuration
 (let* ([spacelist (bwrep->list (intify (hc-position-bs *start*) 0 4))]
@@ -72,21 +113,35 @@
   (hc-position-bs *start*))
 
 
-;; init-worker: number -> worker-place
+;; init-worker: number remote-node -> worker-place
 ;; run on worker -- just cause the workers to load the spaceindex
-(define (init-worker i)
-  (let ([a-worker-place (dynamic-place "stp-worker.rkt" 'worker-main)])
-    (place-channel-put a-worker-place 'init)
-    (place-channel-put a-worker-place i)
+(define (init-worker i node)
+  (let ([a-worker-place (supervise-place-at node *worker-path* 'make-stp-worker)])
+    (stp-worker-init a-worker-place i)
+    (printf "here~%")
+    (printf "Initialized worker ~a as reported by worker purporting to be ~a~%" i (stp-worker-getid a-worker-place))
     a-worker-place))
 
 ;; init-workers!: -> (listof worker-places)
 ;; initiate the remote-nodes and places, get the workers to load the spaceindex, etc.
 ;; first try hard-coding four workers on localhost 
 (define (init-workers!)
-  (set! WORKERS
-        (for/list ([i (in-range 4)])
-          (init-worker i))))
+  ;#|
+  (set! *worker-nodes* (for/list ([host *worker-hosts*])
+                         (spawn-remote-racket-node host #:listen-port 6344)))
+  (set! *workers*
+        (for/fold ([wrkrs null])
+                  ([node *worker-nodes*])
+          (append (for/list ([i (in-range *workers-per-host*)])
+                    (init-worker i node)))))
+  ;|#
+  #|
+  (set! *workers*
+        (for/list ([i (in-range *workers-per-host*)])
+          (dynamic-place *worker-path* 'worker-main)))
+  |#
+  )
+
 
 (module+ main
   ;(set! WORKERS (init-workers))
@@ -108,6 +163,9 @@
                                         1)))
   |#
   (print search-result)
+  (for ([p *workers*]) (place-channel-put p 'quit))
+  (map place-wait *workers*)
+  (for ([wn *worker-nodes*]) (node-send-exit wn))
   )
 
 ;(time (start-distributed-search *start*))
