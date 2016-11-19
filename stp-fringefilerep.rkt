@@ -248,7 +248,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
                    (rebase-filespec fspec target)))
                (fringe-pcount f)))
 
-;; distribute-fringe: fringe (listof string) -> void
+;; distribute-fringe: fringe (vectorof string) -> void
 ;; distribute the fringe's segments to the given hosts unless the target host is the same as the master
 (define (distribute-fringe f hosts)
   (for ([seg (fringe-segments f)]
