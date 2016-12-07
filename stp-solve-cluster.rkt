@@ -178,7 +178,8 @@
               (system (format "scp ~a ~a:~a"
                               (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                               (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                              *local-store*)))
+                              *local-store*))
+              )
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile
                   (open-output-file (string-append *local-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)) 
@@ -205,7 +206,9 @@
       (system (format "scp ~a ~a:~a"
                       (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                      *local-store*)))
+                      *local-store*))
+      )
+    ;;***!!!*** this looks problematic: if those segments belong on other hosts ....
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
       (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right))))
     ;; complete the sampling-stat
@@ -213,7 +216,13 @@
     (vector-set! sample-stats 6 (for/vector ([i *num-fringe-slices*]) 
                                   (file-size (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right)))))
     ;; delete files that are no longer needed
+    ;; partial-expansions
     (for ([efspec (in-list lo-expand-fspec)]) (delete-file (filespec-fullpathname efspec)))
+    ;; proto-fringe-segments that have been copied to remote hosts -- NOTE: once we change the copy to async this will have to come at the end!!!
+    (for ([i (in-range *num-fringe-slices*)]
+          #:unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
+                             (placeless-worker-host (vector-ref placeless-workers wid))))
+      (delete-file (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right))))
     ;(unless (string=? *master-name* "localhost") (delete-fringe pf))
     ;(delete-file use-ofilename)
     ;;**** THIS STRIKES ME AS DANGEROUS: IF ONE PROCESS ON MULTI-CORE MACHINE FINISHES FIRST ....
