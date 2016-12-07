@@ -5,6 +5,8 @@
          racket/runtime-path
          racket/list
          racket/set
+         racket/vector
+         racket/system
          "stpconfigs/configenv.rkt"
          "stp-init.rkt"
          "stp-solve-base.rkt"
@@ -122,31 +124,32 @@
     (printf "Initialized worker ~a as reported by worker purporting to be ~a~%" i (stp-worker-getid a-worker-place))
     a-worker-place))
 
-;; init-workers!: -> (listof worker-places)
+;; init-workers!: -> (void)
 ;; initiate the remote-nodes and places, get the workers to load the spaceindex, etc.
 ;; first try hard-coding four workers on localhost 
 (define (init-workers!)
-  ;#|
   (set! *worker-nodes* (for/list ([host *worker-hosts*])
-                         (spawn-remote-racket-node host #:listen-port 6344)))
+                         (spawn-remote-racket-node host #:listen-port 6344)
+                         ;(create-place-node host #:listen-port 6344)
+                         ))
   (for ([node *worker-nodes*]
         [host *worker-hosts*]
-        [idbase (in-range 0 (* (length *worker-hosts*) *workers-per-host*) 2)])
+        [idbase (in-range 0 (* (length *worker-hosts*) *workers-per-host*) *workers-per-host*)])
     (for ([i (in-range *workers-per-host*)])
-      (vector-set! *workers* i
-                   (worker host (+ idbase i) (init-worker (+ idbase i) node)))))
-  ;|#
-  #|
-  (set! *workers*
-        (for/list ([i (in-range *workers-per-host*)])
-          (dynamic-place *worker-path* 'worker-main)))
-  |#
+      (let ([wplace (init-worker (+ idbase i) node)])
+        (vector-set! *workers* (+ idbase i)
+                     (worker host (+ idbase i) wplace))
+                     )))
+  (for ([w *workers*])
+    (printf "Worker ~a at host ~a~%" (worker-id w) (worker-host w)))
   )
 
 
 (module+ main
   ;(set! WORKERS (init-workers))
   (init-workers!)
+  (printf "workers: ~s~%workers-w/out-places: ~s~%" *workers*
+          (vector-map strip-place *workers*))
   (define search-result (time (start-distributed-search *start*)))
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d142-" 12 "/space/bigspace/fringefiles/")
@@ -164,6 +167,7 @@
                                         1)))
   |#
   (print search-result)
+  ;(for ([w *workers*]) (stp-worker-close-log (worker-place w)))
   (for ([wn *worker-nodes*]) (node-send-exit wn))
   )
 
