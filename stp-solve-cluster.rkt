@@ -195,6 +195,17 @@
     (for ([fh (in-list (if *late-duplicate-removal* lo-effh (cons pffh (cons cffh lo-effh))))])
       (close-input-port (fringehead-iprt fh)))
     (close-output-port proto-slice-ofile)
+    ;; copy last proto-fringe-segment if necessary
+    (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
+                      (placeless-worker-host (vector-ref placeless-workers wid)))
+      (system (format "echo scp ~a ~a:~a >> scpout.txt"
+                      (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                      (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
+                      *local-store*))
+      (system (format "scp ~a ~a:~a"
+                      (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                      (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
+                      *local-store*)))
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
       (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right))))
     ;; complete the sampling-stat
@@ -300,12 +311,6 @@
 (define (remote-expand-fringe ranges pf cf depth workers)
   ;(printf "remote-expand-fringe: current-fringe of ~a split as: ~a~%" (fringe-pcount cf) ranges ;(map (lambda (pr) (- (second pr) (first pr))) ranges)
    ;       )
-  ;; --- Distribute fringes (if necessary) ---------------------------
-  ;; NEED TO (MAYBE) DISTRIBUTE FRINGE SEGMENTS TO RESPECTIVE WORKERS
-  (if (= (length (fringe-segments cf)) (vector-length workers))
-      (begin (distribute-fringe cf (vector-map worker-host workers))
-             (distribute-fringe pf (vector-map worker-host workers)))
-      'never-mind)
   ;; Now initiate the actual expansions
   (let* ([just-start-things (for ([range-pair (in-list ranges)]
                                   [i (in-range (length ranges))]
@@ -340,11 +345,12 @@
         (copy-file base-fname tmp-partexp-name)))))
                                 
 
-;; distributed-merge-proto-fringe-slices: (list number number) (vectorof fspec) int string fringe fringe int -> (list string number)
+;; distributed-merge-proto-fringe-slices: (list number number) (vectorof fspec) int string fringe fringe int -> (list string number number)
 ;; given a list of filespecs pointing to the proto-fringe-segments (PFSs) assigned to this worker and needing to be merged, copy the PFSs
 ;; and merge into a single fringe-segment that will participate in the new fringe, removing duplicates among slices,
 ;; and depending on value of *late-duplicate-removal* possibly also removing duplicates 
 ;; from the corresponding segment of the previous/current fringe.
+;; Returns: list of file-name, position-count in that file, and file-size of that file.
 (define (distributed-merge-proto-fringe-slices range slice-fspecs depth ofile-name pf cf which-slice)
   ;(define (remote-merge-proto-fringes my-range expand-files-specs depth ofile-name)
   ;; expand-files-specs are of pattern: "proto-fringe-dXX-NNN" for depth XX and proc-id NNN, pointing to working (shared) directory 
@@ -409,7 +415,7 @@
     (unless (and #f (string=? slice-fspecs-fbase *local-store*))
       (for ([fspc (in-vector local-protofringe-fspecs)]) 
         (delete-file (filespec-fullpathname fspc)))) ; *** but revisit when we reduce work packet size for load balancing
-    (list ofile-name segment-size)))
+    (list ofile-name segment-size (file-size (string-append *share-store* ofile-name)))))
 
 ;; remote-merge: (listof (list number number)) (vectorof (vectorof fspec)) int fringe fringe (vectorof worker) -> (listof (list string int))
 ;; merge the proto-fringes from the workers and, depending on value of *late-dulicate-removal*, 
@@ -459,12 +465,19 @@
           depth pf-spec cf-spec)|#
   (let* (;; EXPAND
          [start-expand (current-seconds)]
+         [first-time? (= (length (fringe-segments cf)) 1)]
+         ;; --- Distribute fringes (if necessary) ---------------------------
+         ;; NEED TO (MAYBE) DISTRIBUTE FRINGE SEGMENTS TO RESPECTIVE WORKERS
+         [unique-worker-hosts (remove-duplicates (for/list ([w workers]) (worker-host w)))]
+         [maybe-distrib-fringes (when first-time?
+                                  (begin (distribute-fringe cf unique-worker-hosts)
+                                         (distribute-fringe pf unique-worker-hosts)))]
          ;[ranges (make-vector-ranges (fringe-pcount cf))]
          [ranges (if (or #t (= (length (fringe-segments cf)) *num-fringe-slices*))
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         ;[pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
@@ -481,11 +494,11 @@
                                                  *local-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
-         ;[pmsg2 (printf "starting distributed merge at depth ~a~%" depth)]
+         [pmsg2 (printf "starting distributed merge at depth ~a w/ proto-specs: ~a~%" depth proto-fringe-fspecs)]
          [sorted-segment-fspecs 
-          (remote-merge (if (= (length ranges) *num-fringe-slices*)
-                            ranges
-                            (make-list *num-fringe-slices* (car ranges)))
+          (remote-merge (if first-time?
+                            (make-list *num-fringe-slices* (car ranges))
+                            ranges)
                         proto-fringe-fspecs depth pf cf workers)]
          [merge-end (current-seconds)]
          ;; -------------------------------------------
@@ -496,6 +509,7 @@
                                      (delete-fringe pf *local-store*)))]
          [sorted-expansion-files (map first sorted-segment-fspecs)]
          [sef-lengths (map second sorted-segment-fspecs)]
+         [sef-sizes (map third sorted-segment-fspecs)]
          )
     ;; create the _new_ current-fringe
     #|
@@ -544,8 +558,9 @@
     ;; make the new fringe to return
     (make-fringe *local-store*
                  (for/list ([segmentfile (in-list sorted-expansion-files)]
-                            [length (in-list sef-lengths)])
-                   (make-filespec segmentfile length (file-size (string-append *local-store* segmentfile)) *local-store*))
+                            [length (in-list sef-lengths)]
+                            [size (in-list sef-sizes)])
+                   (make-filespec segmentfile length size *local-store*))
                  (for/sum ([len (in-list sef-lengths)]) len))
     ))
 
