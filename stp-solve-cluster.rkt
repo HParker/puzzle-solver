@@ -114,6 +114,7 @@
 ;; ---------------------------------------------------------------------------------------
 ;; EXPANSION .....
 
+
 ;; remove-dupes: fringe fringe (listof filespec) int string int int float float float (vectorof worker) -> sampling-stat
 ;; Running in distributed worker processes:
 ;; Remove duplicate positions from the list of expand-fspec files (i.e., partial-expansion...),
@@ -487,7 +488,7 @@
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         ;[pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
