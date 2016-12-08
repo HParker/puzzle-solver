@@ -1,6 +1,8 @@
 # Sliding-Tile Puzzle Files
 fringefiles/fringe-segment*
 fringefiles/fringe-d*
+fringefiles/proto-*
+fringefiles/partial*
 stpconfigs/*.rkt
 savefringes/
 riottest/

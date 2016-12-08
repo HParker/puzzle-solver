@@ -171,15 +171,10 @@
             (unless (or #f ;(string=? *master-name* "localhost")
                         (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                                   (placeless-worker-host (vector-ref placeless-workers wid))))
-              (system (format "echo scp -p ~a ~a:~a >> scpout.txt"
+              (system (format "scp -pq4 ~a ~a:~a"
                               (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                               (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                              *local-store*))
-              (system (format "scp -p ~a ~a:~a"
-                              (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
-                              (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                              *local-store*))
-              )
+                              *local-store*)))
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile
                   (open-output-file (string-append *local-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)) 
@@ -199,15 +194,10 @@
     ;; copy last proto-fringe-segment if necessary
     (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       (placeless-worker-host (vector-ref placeless-workers wid)))
-      (system (format "echo scp -p ~a ~a:~a >> scpout.txt"
+      (system (format "scp -pq4 ~a ~a:~a"
                       (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                      *local-store*))
-      (system (format "scp -p ~a ~a:~a"
-                      (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
-                      (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                      *local-store*))
-      )
+                      *local-store*)))
     ;;***!!!*** this looks problematic: if those segments belong on other hosts ....
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
       (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right))))

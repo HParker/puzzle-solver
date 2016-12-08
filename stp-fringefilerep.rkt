@@ -255,7 +255,7 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
          [seg (fringe-segments f)]
          #:unless (string=? h thishost)
          )
-    (system (format "scp ~a ~a:~a" (filespec-fullpathname seg) h *local-store*))))
+    (system (format "scp -pq4 ~a ~a:~a" (filespec-fullpathname seg) h *local-store*))))
                  
 ;; resegment-fringe: fringe number string -> symbol
 ;; given a fringe, redistribute it over the given number of segments

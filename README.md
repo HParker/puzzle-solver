@@ -55,3 +55,5 @@ by inspecting the output from the shell in step 1.
 
 In the wplace branch:
 - make fringe-segment copying asynchronous
+- consider using compression for the copying
+- explore faster alternatives to scp for copying
