@@ -18,6 +18,7 @@ Provide defining values for the following global variables:
 |#
 
 ;;--- Environment values -----------
+(define *stp-home-path* "/home/iba/puzzle-solver/")
 (define *master-name* "wcpkneel")
 (define *local-store* "/state/partition1/fringefiles/")
 (define *share-store* "/share/bigspace/fringefiles/")
