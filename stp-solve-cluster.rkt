@@ -171,11 +171,11 @@
             (unless (or #f ;(string=? *master-name* "localhost")
                         (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                                   (placeless-worker-host (vector-ref placeless-workers wid))))
-              (system (format "echo scp ~a ~a:~a >> scpout.txt"
+              (system (format "echo scp -p ~a ~a:~a >> scpout.txt"
                               (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                               (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                               *local-store*))
-              (system (format "scp ~a ~a:~a"
+              (system (format "scp -p ~a ~a:~a"
                               (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                               (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                               *local-store*))
@@ -199,11 +199,11 @@
     ;; copy last proto-fringe-segment if necessary
     (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       (placeless-worker-host (vector-ref placeless-workers wid)))
-      (system (format "echo scp ~a ~a:~a >> scpout.txt"
+      (system (format "echo scp -p ~a ~a:~a >> scpout.txt"
                       (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       *local-store*))
-      (system (format "scp ~a ~a:~a"
+      (system (format "scp -p ~a ~a:~a"
                       (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       *local-store*))
@@ -393,11 +393,19 @@
                                          (filter-not (lambda (fh) (eof-object? (fringehead-next fh))) to-merge-fheads))
                           lheap)]
          ;[pmsg2-5 (printf "distmerge-debug2-5: made heap with ~a fheads'~%" (heap-count heap-o-fheads))]
+         #|
          [pffh (fh-from-fringe pf (if (= (length (fringe-segments pf)) 1) 0
                                       (for/sum ([i which-slice]
                                                 [fspec (fringe-segments pf)]) (filespec-pcount fspec))))]
+         |#
+         [pffh (fh-from-filespec (if (= (length (fringe-segments pf)) 1)
+                                     (first (fringe-segments pf))
+                                     (list-ref (fringe-segments pf) which-slice)))]
          ;[pmsg2-7 (printf "debug2-7: made the pffh okay~%")]
-         [cffh (fh-from-fringe cf (first range))]
+         ;[cffh (fh-from-fringe cf (first range))]
+         [cffh (fh-from-filespec (if (= (length (fringe-segments cf)) 1)
+                                     (first (fringe-segments cf))
+                                     (list-ref (fringe-segments cf) which-slice)))]
          ;[pmsg3 (printf "distmerge-debug3: made the heap with ~a frigeheads in it~%" (heap-count heap-o-fheads))]
          ;****** log duplicate eliminations here
          [segment-size (let ([last-pos (make-hcpos (bytes 49 49 49 49))]
@@ -447,9 +455,12 @@
                                   [wp (vector-map worker-place workers)])
                               (let ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))])
                                 (stp-worker-merge-slices wp (list range expand-fspecs-slice depth ofile-name pf cf i))))]
-         [merge-results (for/list ([wp (vector-map worker-place workers)])
-                          (wait-for-results wp)
-                          (stp-worker-get-merge-results wp))])
+         [merge-results (for/list ([w workers]
+                                   [i (in-range *num-fringe-slices*)])
+                          ;(printf "waiting for merge-results worker ~a at host ~a~%" i (worker-host w))
+                          (wait-for-results (worker-place w))
+                          ;(printf "finished waiting for worker ~a at host ~a~%" i (worker-host w))
+                          (stp-worker-get-merge-results (worker-place w)))])
     ;;(printf "distributed-expand-fringe: merge-range = ~a~%~a~%" merge-range merged-responsibility-range)    
     ;; print the sizes of the merged fringe-slices
     #|
@@ -486,7 +497,7 @@
                      (make-simple-ranges (fringe-segments cf))
                      (dynamic-slice-ranges (fringe-segments cf)))]
          ;; --- Distribute the actual expansion work ------------------------
-         [pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
+         ;[pmsg1 (printf "starting distributed expand at depth ~a~%" depth)]
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
@@ -503,13 +514,14 @@
                                                  *local-store*)))]
          ;; MERGE
          ;; --- Distribute the merging work ----------
-         [pmsg2 (printf "starting distributed merge at depth ~a w/ proto-specs: ~a~%" depth proto-fringe-fspecs)]
+         ;[pmsg2 (printf "starting distributed merge at depth ~a w/ proto-specs: ~a~%" depth proto-fringe-fspecs)]
          [sorted-segment-fspecs 
           (remote-merge (if first-time?
                             (make-list *num-fringe-slices* (car ranges))
                             ranges)
                         proto-fringe-fspecs depth pf cf workers)]
          [merge-end (current-seconds)]
+         ;[pmsg3 (printf "finished distributed merge at depth ~a~%" depth)]
          ;; -------------------------------------------
          ;; delete previous fringe now that duplicates have been removed
          [delete-previous-fringe (unless *preserve-prior-fringes*

@@ -50,3 +50,8 @@ if you're using different hosts for workers
 3. You can confirm that the workers have registered with the server
 by inspecting the output from the shell in step 1.
 4. Finally, run `racket stp-solve-cluster.rkt` and watch it churn through the search.
+
+## To-do
+
+In the wplace branch:
+- make fringe-segment copying asynchronous
