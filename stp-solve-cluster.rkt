@@ -360,17 +360,9 @@
   ;(printf "distributed-merge-proto-fringe-slices: ")
   ;(for ([fs slice-fspecs]) (printf "~a: ~a;  " (filespec-fname fs) (filespec-pcount fs))) (printf "~%")
   (let* ([slice-fspecs-fbase (filespec-fbase (vector-ref slice-fspecs 0))]
-         [mrg-segment-oport (open-output-file (format "~a~a" *local-store* ofile-name) #:exists 'replace)] ; try writing directly to NFS
+         [mrg-segment-oport (open-output-file (format "~a~a" *local-store* ofile-name) #:exists 'replace)]
          [local-protofringe-fspecs (for/vector ([fs slice-fspecs]
                                                 #:unless (zero? (filespec-pcount fs))) (rebase-filespec fs *local-store*))]
-         ;; copy PFSs from share-store to local-store
-         #|
-         [copy-result (unless (string=? slice-fspecs-fbase *local-store*)
-                        (for ([shared-PFS-fspec (for/vector ([fs slice-fspecs] #:when (positive? (filespec-pcount fs))) fs)]
-                              [local-PFS-fspec local-protofringe-fspecs]
-                              )
-                          (copy-file (filespec-fullpathname shared-PFS-fspec) (filespec-fullpathname local-PFS-fspec))))]
-         |#
          ;[local-protofringe-fspecs (for/list ([fs (in-vector slice-fspecs)] #:unless (zero? (filespec-pcount fs))) fs)]
          ;[pmsg1 (printf "distmerge-debug1: ~a fspecs in ~a~%" (vector-length slice-fspecs) local-protofringe-fspecs)]
          ;******
@@ -423,7 +415,7 @@
     (unless (and #f (string=? slice-fspecs-fbase *local-store*))
       (for ([fspc (in-vector local-protofringe-fspecs)]) 
         (delete-file (filespec-fullpathname fspc)))) ; *** but revisit when we reduce work packet size for load balancing
-    (list ofile-name segment-size (file-size (string-append *share-store* ofile-name)))))
+    (list ofile-name segment-size (file-size (string-append *local-store* ofile-name)))))
 
 ;; remote-merge: (listof (list number number)) (vectorof (vectorof fspec)) int fringe fringe (vectorof worker) -> (listof (list string int))
 ;; merge the proto-fringes from the workers and, depending on value of *late-dulicate-removal*, 
