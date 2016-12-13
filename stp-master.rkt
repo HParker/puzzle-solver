@@ -132,13 +132,14 @@
                          (spawn-remote-racket-node host #:listen-port 6344)
                          ;(create-place-node host #:listen-port 6344)
                          ))
-  (for ([node *worker-nodes*]
-        [host *worker-hosts*]
-        [idbase (in-range 0 (* (length *worker-hosts*) *workers-per-host*) *workers-per-host*)])
-    (for ([i (in-range *workers-per-host*)])
-      (let ([wplace (init-worker (+ idbase i) node)])
-        (vector-set! *workers* (+ idbase i)
-                     (worker host (+ idbase i) wplace))
+  (for ([wrk-at-host *workers-per-host*])
+    (for ([node *worker-nodes*]
+          [host *worker-hosts*]
+          [idbase (in-range (* wrk-at-host (length *worker-hosts*))
+                            (* (add1 wrk-at-host) (length *worker-hosts*)))])
+      (let ([wplace (init-worker idbase node)])
+        (vector-set! *workers* idbase
+                     (worker host idbase wplace))
                      )))
   (for ([w *workers*])
     (printf "Worker ~a at host ~a~%" (worker-id w) (worker-host w)))
