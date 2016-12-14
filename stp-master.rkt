@@ -120,7 +120,6 @@
 (define (init-worker i node)
   (let ([a-worker-place (supervise-place-at node *worker-path* 'make-stp-worker)])
     (stp-worker-init a-worker-place i)
-    (printf "here~%")
     (printf "Initialized worker ~a as reported by worker purporting to be ~a~%" i (stp-worker-getid a-worker-place))
     a-worker-place))
 
@@ -149,8 +148,7 @@
 (module+ main
   ;(set! WORKERS (init-workers))
   (init-workers!)
-  (printf "workers: ~s~%workers-w/out-places: ~s~%" *workers*
-          (vector-map strip-place *workers*))
+  ;(printf "workers: ~s~%workers-w/out-places: ~s~%" *workers* (vector-map strip-place *workers*))
   (define search-result (time (start-distributed-search *start*)))
   #|
   (define search-result (time (cfs-file (make-fringe-from-files "fringe-segment-d142-" 12 "/space/bigspace/fringefiles/")
