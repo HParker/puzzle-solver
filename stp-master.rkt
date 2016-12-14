@@ -16,7 +16,7 @@
          )
 
 (define *local-found-goal* #f)
-(define *diy-threshold* 5000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
+(define *diy-threshold* 50000) ;;**** this must be significantly less than EXPAND-SPACE-SIZE 
 (define *level-start-time* 0)
 (define *worker-nodes* null)
 (define *workers* (make-vector (* (length *worker-hosts*) *workers-per-host*) null)) ;; list-of worker structs

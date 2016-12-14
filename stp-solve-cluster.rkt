@@ -199,9 +199,15 @@
                       (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       *local-store*)))
-    ;;***!!!*** this looks problematic: if those segments belong on other hosts ....
+    ;; copy empty proto-fringe-segments if necessary
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
-      (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right))))
+      (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
+      (unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
+                        (placeless-worker-host (vector-ref placeless-workers wid)))
+        (system (format "scp -pq4 ~a ~a:~a"
+                        (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                        (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
+                        *local-store*))))
     ;; complete the sampling-stat
     (vector-set! sample-stats 0 (for/sum ([i (vector-ref sample-stats 3)]) i))
     (vector-set! sample-stats 6 (for/vector ([i *num-fringe-slices*]) 
