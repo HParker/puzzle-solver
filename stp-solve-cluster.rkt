@@ -14,6 +14,7 @@
          ;rnrs/sorting-6
          racket/place
          racket/place/define-remote-server
+         remote-shell/ssh
          )
 
 (require "stpconfigs/configenv.rkt"
@@ -153,6 +154,7 @@
                   part-write-time
                   other-expand-time)]
          [last-pos-bs #"NoLastPos"]
+         [remote-hosts (vector-map (lambda (pw) (remote #:host (placeless-worker-host pw))) placeless-workers)]
          )
     ;; locally merge the pre-proto-fringes, removing internal duplicates and maybe dupes found in prev- or current-fringes
     (for ([an-fhead (in-heap/consume! heap-o-fheads)])
@@ -171,10 +173,16 @@
             ;; synchronously, start copying the proto-slice to the appropriate host; BUT: later do this asynchronously using process
             (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                               (placeless-worker-host (vector-ref placeless-workers wid)))
+              (scp (vector-ref remote-hosts proto-slice-num)
+                   (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                   (at-remote (vector-ref remote-hosts proto-slice-num) *local-store*))
+              #|
               (system (format "scp -pq4 ~a ~a:~a"
                               (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                               (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                              *local-store*)))
+                              *local-store*))
+              |#
+              )
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile
                   (open-output-file (string-append *local-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)) 
@@ -194,19 +202,31 @@
     ;; copy last proto-fringe-segment if necessary
     (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       (placeless-worker-host (vector-ref placeless-workers wid)))
+      (scp (vector-ref remote-hosts proto-slice-num)
+           (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+           (at-remote (vector-ref remote-hosts proto-slice-num) *local-store*))
+      #|
       (system (format "scp -pq4 ~a ~a:~a"
                       (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
-                      *local-store*)))
+                      *local-store*))
+      |#
+      )
     ;; copy empty proto-fringe-segments if necessary
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
       (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
       (unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
                         (placeless-worker-host (vector-ref placeless-workers wid)))
+        (scp (vector-ref remote-hosts i)
+                   (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+                   (at-remote (vector-ref remote-hosts i) *local-store*))
+        #|
         (system (format "scp -pq4 ~a ~a:~a"
                         (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right))
                         (placeless-worker-host (vector-ref placeless-workers i))
-                        *local-store*))))
+                        *local-store*))
+        |#
+        ))
     ;; complete the sampling-stat
     (vector-set! sample-stats 0 (for/sum ([i (vector-ref sample-stats 3)]) i))
     (vector-set! sample-stats 6 (for/vector ([i *num-fringe-slices*]) 
