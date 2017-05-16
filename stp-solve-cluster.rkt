@@ -15,6 +15,7 @@
          racket/place
          racket/place/define-remote-server
          remote-shell/ssh
+         racket/string
          )
 
 (require "stpconfigs/configenv.rkt"
@@ -497,6 +498,16 @@
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
+         ;; --- Distribute the resulting proto-fringe-segments (PFS) in rotated fasion
+         [pmsg1-1 (printf "starting rotated distribute of proto-fringes~%")]
+         [rotate-them (for ([offset (length workers)])
+                        (for ([worker workers])
+                          (stp-worker-ship-PFS (worker-place worker) (modulo (+ (worker-id worker) offset) (length workers))))
+                        (for ([worker workers])
+                          (stp-worker-sent-PFS (worker-place worker))))]
+         [delete-PFS-files (for ([worker workers])
+                             (stp-worker-delete-PFSs (worker-place worker)))]
+         ;; -----------------------------------------------------------------
          [check-for-goal (for/first ([ss (in-list sampling-stats)]
                                      #:when (vector-ref ss 4))
                            (set! *found-goal* (vector-ref ss 4)))]
@@ -601,6 +612,9 @@
   (define-state expand-results null)
   (define-state merge-results null)
 
+  ;; PFS-shipper struct by which we determine if done or not
+  (define-state pfs-shipper null)
+
   ;; initialize this worker's id
   (define-cast (init id)
     (set! MYID id)
@@ -645,6 +659,35 @@
           [i (seventh args)])
       (set! merge-results (distributed-merge-proto-fringe-slices range expand-fspecs-slice depth ofile-name pf cf i))
       (set! ready #t)))
+
+  ;; send all proto-fringe-segments to their appropriate workers starting with the ID one greater than this one offset from this one
+  ;; and then wrapping around when reaching the last.  Do this asynchronously; that is, let each worker send the next file
+  ;; as soon as the current one is finished.
+  (define-cast (ship-PFS placeless-workers)
+    (let ([num-workers (length placeless-workers)]
+          [ofile-name "foo"]
+          [proto-slice-num 0]
+          )
+      (for ([pw placeless-workers]
+                          [i (in-range 1 (length placeless-workers))]
+                          #:unless (zero? (modulo (- MYID i) (/ (length placeless-workers) *workers-per-host*))))
+                      (scp (remote #:host (placeless-worker-host pw))
+                           (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                           
+                      ))))
+
+  ;; check if the proto-fringe-segment has been sent
+  (define-rpc (sent-PFS)
+    ;; wait for the active pfs-shipper to finish
+    (sync pfs-shipper))
+
+  ;; delete all the proto-fringe-segments on this node
+  (define-cast (delete-PFSs)
+    ;; do this as cast so we don't wait for completion
+    (for ([p (directory-list *local-store*)]
+          #:when (string-contains? (path->string p) "proto"))
+      (delete-file p)))
+    
 
   ;; return the log port
   #|
