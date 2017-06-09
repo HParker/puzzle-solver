@@ -38,6 +38,11 @@
 
 (define *found-goal* #f)
 
+;; pad-num : int -> string
+;; add leading zeros (if needed) when creating file-names with numeric ids
+(define (pad-num i)
+  (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
 
@@ -138,7 +143,7 @@
          [proto-slice-num 0]
          [slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))]
          [proto-slice-ofile 
-          (open-output-file (string-append *local-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+          (open-output-file (string-append *local-store* ofile-name "-" (pad-num proto-slice-num))
                             #:exists 'replace)]
          [slice-counts (make-vector *num-fringe-slices* 0)]
          [sample-stats 
@@ -175,18 +180,18 @@
             (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                               (placeless-worker-host (vector-ref placeless-workers wid)))
               (scp (vector-ref remote-hosts proto-slice-num)
-                   (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                   (format "~a~a-~a" *local-store* ofile-name (pad-num proto-slice-num))
                    (at-remote (vector-ref remote-hosts proto-slice-num) *local-store*))
               #|
               (system (format "scp -pq4 ~a ~a:~a"
-                              (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                              (format "~a~a-~a" *local-store* ofile-name (pad-num proto-slice-num))
                               (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                               *local-store*))
               |#
               )
             (set! proto-slice-num (add1 proto-slice-num))
             (set! proto-slice-ofile
-                  (open-output-file (string-append *local-store* ofile-name "-" (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right)) 
+                  (open-output-file (string-append *local-store* ofile-name "-" (pad-num proto-slice-num))
                                     #:exists 'replace))
             (set! slice-upper-bound (vector-ref *fringe-slice-bounds* (add1 proto-slice-num))))
           (write-bytes  (hc-position-bs efpos) proto-slice-ofile)
@@ -204,26 +209,26 @@
     (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       (placeless-worker-host (vector-ref placeless-workers wid)))
       (scp (vector-ref remote-hosts proto-slice-num)
-           (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+           (format "~a~a-~a" *local-store* ofile-name (pad-num proto-slice-num))
            (at-remote (vector-ref remote-hosts proto-slice-num) *local-store*))
       #|
       (system (format "scp -pq4 ~a ~a:~a"
-                      (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
+                      (format "~a~a-~a" *local-store* ofile-name (pad-num proto-slice-num))
                       (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       *local-store*))
       |#
       )
     ;; copy empty proto-fringe-segments if necessary
     (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
-      (touch (string-append *local-store* ofile-name "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right)))
+      (touch (string-append *local-store* ofile-name "-" (pad-num i)))
       (unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
                         (placeless-worker-host (vector-ref placeless-workers wid)))
         (scp (vector-ref remote-hosts i)
-                   (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+                   (format "~a~a-~a" *local-store* ofile-name (pad-num i))
                    (at-remote (vector-ref remote-hosts i) *local-store*))
         #|
         (system (format "scp -pq4 ~a ~a:~a"
-                        (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+                        (format "~a~a-~a" *local-store* ofile-name (pad-num i))
                         (placeless-worker-host (vector-ref placeless-workers i))
                         *local-store*))
         |#
@@ -231,7 +236,7 @@
     ;; complete the sampling-stat
     (vector-set! sample-stats 0 (for/sum ([i (vector-ref sample-stats 3)]) i))
     (vector-set! sample-stats 6 (for/vector ([i *num-fringe-slices*]) 
-                                  (file-size (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right)))))
+                                  (file-size (format "~a~a-~a" *local-store* ofile-name (pad-num i)))))
     ;; delete files that are no longer needed
     ;; partial-expansions
     (for ([efspec (in-list lo-expand-fspec)]) (delete-file (filespec-fullpathname efspec)))
@@ -239,7 +244,7 @@
     (for ([i (in-range *num-fringe-slices*)]
           #:unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
                              (placeless-worker-host (vector-ref placeless-workers wid))))
-      (delete-file (format "~a~a-~a" *local-store* ofile-name (~a i #:left-pad-string "0" #:width 3 #:align 'right))))
+      (delete-file (format "~a~a-~a" *local-store* ofile-name (pad-num i))))
     sample-stats))
 
 ;; dump-partial-expansion: int string int (listof fspec) float float -> (values (listof fspec) int float float)
@@ -286,7 +291,7 @@
   ;; EXPAND PHASE 1
   (let* ([expand-part-time (current-milliseconds)]
          ;; file naming convention: partial-expansionPPP-NNN for PPP process-id and NNN expansion file count
-         [pre-ofile-template-fname (format "partial-expansion~a" (~a wid #:left-pad-string "0" #:width 3 #:align 'right))]
+         [pre-ofile-template-fname (format "partial-expansion~a" (pad-num wid))]
          [pre-ofile-counter 0]
          [pre-ofiles empty]
          ;; *** Dynamically choose the size of the pre-proto-fringes to keep the number of files below 500 ***
@@ -322,7 +327,7 @@
     (close-input-port (fringehead-iprt cffh))
     ;; PHASE 2: now pass through the proto-fringe expansion file(s) as well as prev-fringe and current-fringe to remove duplicates
     (remove-dupes pf cf pre-ofiles wid
-                  (format "proto-fringe-d~a-~a" depth (~a wid #:left-pad-string "0" #:width 3 #:align 'right)) ;; ofile-name
+                  (format "proto-fringe-d~a-~a" depth (pad-num wid)) ;; ofile-name
                   depth
                   dupes-caught-here sort-time write-time (- (current-milliseconds) expand-part-time) placeless-workers)))
 
@@ -450,7 +455,7 @@
                                   [range ranges]
                                   [expand-fspecs-slice (in-vector expand-files-specs)]
                                   [wp (vector-map worker-place workers)])
-                              (let ([ofile-name (format "fringe-segment-d~a-~a" depth (~a i #:left-pad-string "0" #:width 3 #:align 'right))])
+                              (let ([ofile-name (format "fringe-segment-d~a-~a" depth (pad-num i))])
                                 (stp-worker-merge-slices wp (list range expand-fspecs-slice depth ofile-name pf cf i))))]
          [merge-results (for/list ([w workers]
                                    [i (in-range *num-fringe-slices*)])
@@ -515,7 +520,7 @@
          [proto-fringe-fspecs (for/vector ([i (in-range *num-fringe-slices*)]);; for each index to a slice...
                                 ;; pull out the info from each sampling-stat
                                 (for/vector ([ss (in-list sampling-stats)]) 
-                                  (make-filespec (string-append (vector-ref ss 5) "-" (~a i #:left-pad-string "0" #:width 3 #:align 'right)) ;; fname
+                                  (make-filespec (string-append (vector-ref ss 5) "-" (pad-num i)) ;; fname
                                                  (vector-ref (vector-ref ss 3) i) ;pcount
                                                  (vector-ref (vector-ref ss 6) i) ;file-size
                                                  *local-store*)))]
