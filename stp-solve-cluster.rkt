@@ -294,7 +294,6 @@
          [pre-ofile-template-fname (format "partial-expansion~a" (pad-num wid))]
          [pre-ofile-counter 0]
          [pre-ofiles empty]
-         ;; *** Dynamically choose the size of the pre-proto-fringes to keep the number of files below 500 ***
          [start (first ipair)]
          [end (second ipair)]
          [assignment-count (- end start)]
@@ -503,15 +502,15 @@
          [sampling-stats (remote-expand-fringe ranges pf cf depth workers)]
          [end-expand (current-seconds)]
          ;; -----------------------------------------------------------------
-         ;; --- Distribute the resulting proto-fringe-segments (PFS) in rotated fasion
-         [pmsg1-1 (printf "starting rotated distribute of proto-fringes~%")]
-         [rotate-them (for ([offset (length workers)])
-                        (for ([worker workers])
-                          (stp-worker-ship-PFS (worker-place worker) (modulo (+ (worker-id worker) offset) (length workers))))
-                        (for ([worker workers])
-                          (stp-worker-sent-PFS (worker-place worker))))]
-         [delete-PFS-files (for ([worker workers])
-                             (stp-worker-delete-PFSs (worker-place worker)))]
+         ;; --- Distribute the resulting proto-fringe-segments (PFS) in offset fasion
+         ;[pmsg1-1 (printf "starting offset distribution of proto-fringes~%")]
+         [distribute-proto-fringes
+          (begin
+            (for ([worker workers])
+              (stp-worker-ship-PFS (worker-place worker) (vector-map strip-place workers) (vector-length workers) (format "proto-fringe-d~a-~a-" depth (pad-num (worker-id worker)))))
+            (for ([worker workers])
+              (stp-worker-shipped-PFS (worker-place worker))))]
+         ;[pmsg1-2 (printf "done offset distribution of proto-fringes~%")]
          ;; -----------------------------------------------------------------
          [check-for-goal (for/first ([ss (in-list sampling-stats)]
                                      #:when (vector-ref ss 4))
@@ -535,6 +534,8 @@
          [merge-end (current-seconds)]
          ;[pmsg3 (printf "finished distributed merge at depth ~a~%" depth)]
          ;; -------------------------------------------
+         ;; delete finished proto-fringes
+         ;[delete-proto-fringes (unless first-time? (for ([worker workers]) (stp-worker-delete-PFSs (worker-place worker))))]
          ;; delete previous fringe now that duplicates have been removed
          [delete-previous-fringe (unless *preserve-prior-fringes*
                                    (delete-fringe pf))]
@@ -617,8 +618,10 @@
   (define-state expand-results null)
   (define-state merge-results null)
 
+  (define-state ship-done? #t)
+
   ;; PFS-shipper struct by which we determine if done or not
-  (define-state pfs-shipper null)
+  ;(define-state pfs-shipper null)
 
   ;; initialize this worker's id
   (define-cast (init id)
@@ -665,26 +668,40 @@
       (set! merge-results (distributed-merge-proto-fringe-slices range expand-fspecs-slice depth ofile-name pf cf i))
       (set! ready #t)))
 
+  ;; ship-PFS : [worker-place] (vectorof placeless-worker) N -> void
   ;; send all proto-fringe-segments to their appropriate workers starting with the ID one greater than this one offset from this one
   ;; and then wrapping around when reaching the last.  Do this asynchronously; that is, let each worker send the next file
   ;; as soon as the current one is finished.
-  (define-cast (ship-PFS placeless-workers)
-    (let ([num-workers (length placeless-workers)]
-          [ofile-name "foo"]
-          [proto-slice-num 0]
-          )
-      (for ([pw placeless-workers]
-                          [i (in-range 1 (length placeless-workers))]
-                          #:unless (zero? (modulo (- MYID i) (/ (length placeless-workers) *workers-per-host*))))
-                      (scp (remote #:host (placeless-worker-host pw))
-                           (format "~a~a-~a" *local-store* ofile-name (~a proto-slice-num #:left-pad-string "0" #:width 3 #:align 'right))
-                           
-                      ))))
+  (define-cast (ship-PFS placeless-workers num-workers pf-prefix)
+    (set! ship-done? #f)
+    (for ([i (in-range 1 num-workers)]
+          ;; unless this worker's host is the same host as 
+          #:unless (zero? (modulo (- i MYID) (/ num-workers *workers-per-host*))))
+      (let* ([pw (vector-ref placeless-workers (modulo (+ MYID i) num-workers))]
+             [a-remote (remote #:host (placeless-worker-host pw))]
+             [local-file (format "~a~a-~a" *local-store* pf-prefix (pad-num (modulo (+ MYID i) num-workers)))])
+        (when (file-exists? local-file)
+          (scp a-remote
+               local-file
+               (at-remote a-remote *local-store*)
+               ))))
+    (set! ship-done? #t)
+    )
 
+  ;; wait for prior call on ship-PFS to complete
+  (define-rpc (shipped-PFS)
+    (for/first ([i (in-naturals 1)]
+                #:when (or ship-done?
+                           (not (void? (sleep (/ (expt 2 i) 1000))))))
+      #t))
+
+  #|
   ;; check if the proto-fringe-segment has been sent
   (define-rpc (sent-PFS)
     ;; wait for the active pfs-shipper to finish
     (sync pfs-shipper))
+    |#
+
 
   ;; delete all the proto-fringe-segments on this node
   (define-cast (delete-PFSs)
@@ -692,7 +709,6 @@
     (for ([p (directory-list *local-store*)]
           #:when (string-contains? (path->string p) "proto"))
       (delete-file p)))
-    
 
   ;; return the log port
   #|
@@ -704,4 +720,5 @@
   #|(define-cast (close-log)
     (close-output-port mylog))
   |#
+               
   )
