@@ -37,11 +37,20 @@
 (current-directory *stp-home-path*)
 
 (define *found-goal* #f)
+(define mydebuglog #f)
+
+;;------------------------------------------
+;; UTILITIES
 
 ;; pad-num : int -> string
 ;; add leading zeros (if needed) when creating file-names with numeric ids
 (define (pad-num i)
   (~a i #:left-pad-string "0" #:width 3 #:align 'right))
+
+(define (logdebug s)
+  (when *debug-worker?*
+    (fprintf mydebuglog "~a~%" s)
+    (flush-output mydebuglog)))
 
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
@@ -132,6 +141,7 @@
   ;; the ofile-name is just the file-name -- no *local-store* path where needed
   #|(printf "EXPAND PHASE 2 (REMOVE DUPLICATES) pf: ~a~%cf: ~a~%all of lo-expand-fspec: ~a~%ofile-name: ~a~%depth: ~a~%"
           pf cf lo-expand-fspec ofile-name depth);|#
+  (logdebug "remove-dupes (PHASE 2): begin")
   ;; EXPAND PHASE 2 (REMOVE DUPLICATES)
   (let* ([pffh (and (not *late-duplicate-removal*) (fh-from-fringe pf))]
          [cffh (and (not *late-duplicate-removal*) (fh-from-fringe cf))]
@@ -245,6 +255,7 @@
           #:unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
                              (placeless-worker-host (vector-ref placeless-workers wid))))
       (delete-file (format "~a~a-~a" *local-store* ofile-name (pad-num i))))
+    (logdebug "remove-dupes: done creating proto-fringe-segments")
     sample-stats))
 
 ;; dump-partial-expansion: int string int (listof fspec) float float -> (values (listof fspec) int float float)
@@ -288,6 +299,7 @@
 (define (remote-expand-part-fringe ipair wid pf cf depth placeless-workers)
   ;; prev-fringe spec points to default shared directory; current-fringe spec points to *local-store* folder
   ;(printf "remote-expand-part-fringe: starting with pf: ~a, and cf: ~a~%" pf cf)
+  (logdebug "remote-expand-part-fringe (PHASE 1): begin")
   ;; EXPAND PHASE 1
   (let* ([expand-part-time (current-milliseconds)]
          ;; file naming convention: partial-expansionPPP-NNN for PPP process-id and NNN expansion file count
@@ -324,6 +336,7 @@
       (error 'remote-expand-part-fringe
              (format "only expanded ~a of the assigned ~a (~a-~a) positions" expanded-phase1 assignment-count start end)))
     (close-input-port (fringehead-iprt cffh))
+    (logdebug "remote-expand-part-fringe: done w/ PHASE 1, ready to start PHASE 2")
     ;; PHASE 2: now pass through the proto-fringe expansion file(s) as well as prev-fringe and current-fringe to remove duplicates
     (remove-dupes pf cf pre-ofiles wid
                   (format "proto-fringe-d~a-~a" depth (pad-num wid)) ;; ofile-name
@@ -482,8 +495,8 @@
 ;; given prev and current-fringes and the present depth, expand and merge the current fringe,
 ;; returning the fringe-spec of the newly expanded and merged fringe.
 (define (distributed-expand-fringe pf cf depth workers)
-  #|(printf "distributed-expand-fringe: at depth ~a, pf-definespec: ~a; cf-spec: ~a~%" 
-          depth pf-spec cf-spec)|#
+  (printf "DISTRIBUTED-EXPAND-FRINGE: at depth ~a, pf-definespec: ~a; cf-spec: ~a~%" 
+          depth (fringe-segments pf) (fringe-segments cf))
   (let* (;; EXPAND
          [start-expand (current-seconds)]
          [first-time? (= (length (fringe-segments cf)) 1)]
@@ -603,6 +616,7 @@
 (define wait-for-results
   (let ([wait-time 0.01])
     (lambda (wp)
+      ;(logdebug (format "wait-for-results: waiting ~a sec~%" wait-time))
       (cond [(stp-worker-ready? wp) (set! wait-time 0.01)]
             [else (sleep wait-time)
                   (set! wait-time (* 2 wait-time))
@@ -626,7 +640,7 @@
   ;; initialize this worker's id
   (define-cast (init id)
     (set! MYID id)
-    ;(set! mylog (open-output-file (format "worker-~a" id) #:exists 'replace))
+    (when *debug-worker?* (set! mydebuglog (open-output-file (format "~a/worker-~a-debug.log" *worker-debug-dir* id) #:exists 'replace)))
     )
   ;; report this worker's id
   (define-rpc (getid) MYID)

@@ -5,7 +5,8 @@
          racket/port
          racket/file
          racket/format
-         racket/system)
+         racket/system
+         remote-shell/ssh)
 
 (require 
   ;racket/generator
@@ -253,9 +254,10 @@ findex (short for fringe-index): (listof segment-spec) [assumes the list of segm
 (define (distribute-fringe f hosts [thishost *master-name*])
   (for* ([h hosts]
          [seg (fringe-segments f)]
-         #:unless (string=? h thishost)
-         )
-    (system (format "scp -pq4 ~a ~a:~a" (filespec-fullpathname seg) h *local-store*))))
+         #:unless (string=? h thishost))
+    ;(system (format "scp -pq4 ~a ~a:~a" (filespec-fullpathname seg) h *local-store*))
+    (scp (remote #:host h) (filespec-fullpathname seg) (at-remote (remote #:host h) *local-store*))
+    ))
                  
 ;; resegment-fringe: fringe number string -> symbol
 ;; given a fringe, redistribute it over the given number of segments

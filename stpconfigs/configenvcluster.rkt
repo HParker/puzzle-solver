@@ -25,7 +25,10 @@ Provide defining values for the following global variables:
 (define *worker-hosts*
   (for/list ([i 45])
     (string-append "compute-0-" (number->string i))))
-(define *workers-per-host* 4)
+(define *workers-per-host* 2)
+
+(define *worker-debug-dir* "/state/partition1/fringefiles/log/")
+(define *debug-worker?* #t)
 
 ;;--- Search values ----------------
 #| *late-duplicate-removal*: whether duplicates with prev- and current-fringes are checked on initial local-merge (#f)
