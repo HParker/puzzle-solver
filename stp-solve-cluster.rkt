@@ -37,7 +37,7 @@
 (current-directory *stp-home-path*)
 
 (define *found-goal* #f)
-(define mydebuglog #f)
+(define mydebuglog (format "~a/master-debug.log" *worker-debug-dir*))
 
 ;;------------------------------------------
 ;; UTILITIES
@@ -47,10 +47,14 @@
 (define (pad-num i)
   (~a i #:left-pad-string "0" #:width 3 #:align 'right))
 
+;; logdebug : string -> void
+;; write the given string to the debug file
 (define (logdebug s)
   (when *debug-worker?*
-    (fprintf mydebuglog "~a~%" s)
-    (flush-output mydebuglog)))
+    (with-output-to-file mydebuglog
+      (lambda () 
+        (printf "~a~%" s))
+      #:existis 'append)))
 
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
@@ -141,7 +145,7 @@
   ;; the ofile-name is just the file-name -- no *local-store* path where needed
   #|(printf "EXPAND PHASE 2 (REMOVE DUPLICATES) pf: ~a~%cf: ~a~%all of lo-expand-fspec: ~a~%ofile-name: ~a~%depth: ~a~%"
           pf cf lo-expand-fspec ofile-name depth);|#
-  (logdebug "remove-dupes (PHASE 2): begin")
+  (logdebug (format "remove-dupes (Depth ~a, Phase 2): begin" depth))
   ;; EXPAND PHASE 2 (REMOVE DUPLICATES)
   (let* ([pffh (and (not *late-duplicate-removal*) (fh-from-fringe pf))]
          [cffh (and (not *late-duplicate-removal*) (fh-from-fringe cf))]
@@ -218,6 +222,7 @@
     ;; copy last proto-fringe-segment if necessary
     (unless (string=? (placeless-worker-host (vector-ref placeless-workers proto-slice-num))
                       (placeless-worker-host (vector-ref placeless-workers wid)))
+      (logdebug "remove-dupes (Depth ~a): about to copy final proto-fringe-segment ~a" depth proto-slice-num)
       (scp (vector-ref remote-hosts proto-slice-num)
            (format "~a~a-~a" *local-store* ofile-name (pad-num proto-slice-num))
            (at-remote (vector-ref remote-hosts proto-slice-num) *local-store*))
@@ -229,20 +234,22 @@
       |#
       )
     ;; copy empty proto-fringe-segments if necessary
-    (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
-      (touch (string-append *local-store* ofile-name "-" (pad-num i)))
-      (unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
-                        (placeless-worker-host (vector-ref placeless-workers wid)))
-        (scp (vector-ref remote-hosts i)
-                   (format "~a~a-~a" *local-store* ofile-name (pad-num i))
-                   (at-remote (vector-ref remote-hosts i) *local-store*))
-        #|
-        (system (format "scp -pq4 ~a ~a:~a"
+    (unless (= (add1 proto-slice-num) *num-fringe-slices*)
+      (logdebug "remove-dupes (Depth ~a): have empty proto-slice(s) to copy from ~a to ~a" depth (add1 proto-slice-num) *num-fringe-slices*)
+      (for ([i (in-range (add1 proto-slice-num) *num-fringe-slices*)])
+        (touch (string-append *local-store* ofile-name "-" (pad-num i)))
+        (unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
+                          (placeless-worker-host (vector-ref placeless-workers wid)))
+          (scp (vector-ref remote-hosts i)
+               (format "~a~a-~a" *local-store* ofile-name (pad-num i))
+               (at-remote (vector-ref remote-hosts i) *local-store*))
+          #|
+          (system (format "scp -pq4 ~a ~a:~a"
                         (format "~a~a-~a" *local-store* ofile-name (pad-num i))
                         (placeless-worker-host (vector-ref placeless-workers i))
                         *local-store*))
-        |#
-        ))
+          |#
+          )))
     ;; complete the sampling-stat
     (vector-set! sample-stats 0 (for/sum ([i (vector-ref sample-stats 3)]) i))
     (vector-set! sample-stats 6 (for/vector ([i *num-fringe-slices*]) 
@@ -255,7 +262,7 @@
           #:unless (string=? (placeless-worker-host (vector-ref placeless-workers i))
                              (placeless-worker-host (vector-ref placeless-workers wid))))
       (delete-file (format "~a~a-~a" *local-store* ofile-name (pad-num i))))
-    (logdebug "remove-dupes: done creating proto-fringe-segments")
+    (logdebug "remove-dupes (Depth ~a): done creating proto-fringe-segments" depth)
     sample-stats))
 
 ;; dump-partial-expansion: int string int (listof fspec) float float -> (values (listof fspec) int float float)
@@ -299,7 +306,7 @@
 (define (remote-expand-part-fringe ipair wid pf cf depth placeless-workers)
   ;; prev-fringe spec points to default shared directory; current-fringe spec points to *local-store* folder
   ;(printf "remote-expand-part-fringe: starting with pf: ~a, and cf: ~a~%" pf cf)
-  (logdebug "remote-expand-part-fringe (PHASE 1): begin")
+  (logdebug "remote-expand-part-fringe (Depth ~a, Phase 1): begin" depth)
   ;; EXPAND PHASE 1
   (let* ([expand-part-time (current-milliseconds)]
          ;; file naming convention: partial-expansionPPP-NNN for PPP process-id and NNN expansion file count
@@ -336,7 +343,7 @@
       (error 'remote-expand-part-fringe
              (format "only expanded ~a of the assigned ~a (~a-~a) positions" expanded-phase1 assignment-count start end)))
     (close-input-port (fringehead-iprt cffh))
-    (logdebug "remote-expand-part-fringe: done w/ PHASE 1, ready to start PHASE 2")
+    (logdebug "remote-expand-part-fringe (Depth ~a): done w/ PHASE 1, ready to start PHASE 2" depth)
     ;; PHASE 2: now pass through the proto-fringe expansion file(s) as well as prev-fringe and current-fringe to remove duplicates
     (remove-dupes pf cf pre-ofiles wid
                   (format "proto-fringe-d~a-~a" depth (pad-num wid)) ;; ofile-name
@@ -640,8 +647,9 @@
   ;; initialize this worker's id
   (define-cast (init id)
     (set! MYID id)
-    (when *debug-worker?* (set! mydebuglog (open-output-file (format "~a/worker-~a-debug.log" *worker-debug-dir* id) #:exists 'replace)))
+    (set! mydebuglog (format "~a/worker-~a-debug.log" *worker-debug-dir* id))
     )
+  
   ;; report this worker's id
   (define-rpc (getid) MYID)
 
