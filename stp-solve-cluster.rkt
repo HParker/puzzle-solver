@@ -30,6 +30,8 @@
 ;(profiling-enabled #t)
 
 (provide *found-goal*
+         mydebuglog
+         logdebug
          distributed-expand-fringe
          remote-expand-part-fringe
          distributed-merge-proto-fringe-slices)
@@ -52,9 +54,11 @@
 (define (logdebug s)
   (when *debug-worker?*
     (with-output-to-file mydebuglog
-      (lambda () 
-        (printf "~a~%" s))
-      #:existis 'append)))
+      (lambda ()
+        (printf "~a~%" s)))
+    ;;(let ([out (open-output-file mydebuglog #:exists 'append)])
+     ;; (fprintf out "~a~%" s))
+    ))
 
 ;;------------------------------------------
 ;; FRINGE SLICING: (proto-)fringe slicing
@@ -389,7 +393,6 @@
 ;; from the corresponding segment of the previous/current fringe.
 ;; Returns: list of file-name, position-count in that file, and file-size of that file.
 (define (distributed-merge-proto-fringe-slices range slice-fspecs depth ofile-name pf cf which-slice)
-  ;(define (remote-merge-proto-fringes my-range expand-files-specs depth ofile-name)
   ;; expand-files-specs are of pattern: "proto-fringe-dXX-NNN" for depth XX and proc-id NNN, pointing to working (shared) directory 
   ;; ofile-name is of pattern: "fringe-segment-dX-NNN", where the X is the depth and the NN is a slice identifier
   ;(printf "distributed-merge-proto-fringe-slices: which-slice given as ~a~%" which-slice)
@@ -648,6 +651,7 @@
   (define-cast (init id)
     (set! MYID id)
     (set! mydebuglog (format "~a/worker-~a-debug.log" *worker-debug-dir* id))
+    (logdebug (format "initialized worker ~a" id))
     )
   
   ;; report this worker's id

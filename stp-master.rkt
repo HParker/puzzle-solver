@@ -118,7 +118,9 @@
 ;; init-worker: number remote-node -> worker-place
 ;; run on worker -- just cause the workers to load the spaceindex
 (define (init-worker i node)
+  (printf "init-worker: about to try to create a worker-place~%")
   (let ([a-worker-place (supervise-place-at node *worker-path* 'make-stp-worker)])
+    (printf "  have the worker, now call the init function on it~%")
     (stp-worker-init a-worker-place i)
     (printf "Initialized worker ~a as reported by worker purporting to be ~a~%" i (stp-worker-getid a-worker-place))
     a-worker-place))
@@ -127,10 +129,12 @@
 ;; initiate the remote-nodes and places, get the workers to load the spaceindex, etc.
 ;; first try hard-coding four workers on localhost 
 (define (init-workers!)
+  (printf "init-workers!: about to spawn-remote-racket-node~%")
   (set! *worker-nodes* (for/list ([host *worker-hosts*])
                          (spawn-remote-racket-node host #:listen-port 6344)
                          ;(create-place-node host #:listen-port 6344)
                          ))
+  (printf "init-workers!: done spawn; init-worker~%")
   (for ([wrk-at-host *workers-per-host*])
     (for ([node *worker-nodes*]
           [host *worker-hosts*]
@@ -147,6 +151,7 @@
 
 (module+ main
   ;(set! WORKERS (init-workers))
+  (logdebug "main: about to call init-workers!")
   (init-workers!)
   ;(printf "workers: ~s~%workers-w/out-places: ~s~%" *workers* (vector-map strip-place *workers*))
   (define search-result (time (start-distributed-search *start*)))
