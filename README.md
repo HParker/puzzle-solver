@@ -9,6 +9,10 @@ Fringe Breadth-first Search, and A\*.
 
 Parallelism has been tested on a 32-node cluster
 using the [Riot planet package](http://planet.racket-lang.org/display.ss?package=riot.plt&owner=gcr).
+Subsequently, it was tested on a newer 45-node cluster.
+The Riot package has been replaced with Racket's Distributed Places.
+The place-based code (in branch wplace) fails when 'many' workers are employed.
+Currently looking into that.
 
 ## Overview
 
@@ -30,11 +34,17 @@ whose settings depend on whether you are running on a cluster or a single machin
 (although maybe with multiple cores).
 once you run the software, this folder will also contain an 'index' file
 for each puzzle that you run.
-- the folder riottest contains examples of using the riot package
+- (deprecated) the folder riottest contains examples of using the riot package
 which is our distribution engine, used for farming out tasks to available processors
 - the folder fringefiles will contain stored fringes from searches
+- for the wplace branch, the stp-master and stp-worker files handle the bulk of the distributed aspects.
 
 ## Running
+
+(The following code still applies for the master but development
+in taking place on the wplace branch which eliminates the Riot package
+and uses Rackets distributed places instead.
+See the README in the wplace branch.)
 
 The various processes in the shells below must be run in the source folder; 
 for example, `/home/username/puzzle-solver`.
